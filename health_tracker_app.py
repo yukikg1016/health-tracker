@@ -45,9 +45,7 @@ SHEET_OPTIONS = {
     "😴 Sleep（睡眠）":           "sleep",
     "🩸 Labs（血液検査）":         "labs",
     "⚖️ In Body（体組成）":       "inbody",
-    "☀️ 朝（Morning）":           "morning",
-    "💤 夜（Night）":             "night",
-    "📱 Health CSV Import":       "health_csv",
+    "💪 Workout":                 "workout",
 }
 
 _PORT = os.environ.get("PORT", "8501")
@@ -91,21 +89,7 @@ with col1:
 
     selected_date = st.date_input("② 日付", value=datetime.date.today())
 
-    # Health CSV の場合は専用UI（CSVアップロード）を表示して早期リターン
-    if sheet_type == "health_csv":
-        st.markdown("---")
-        csv_file = st.file_uploader("③ Health Auto Export CSVをアップロード", type=["csv", "txt"])
-        if csv_file:
-            csv_content = csv_file.read().decode("utf-8-sig")
-            from extractors.health_csv_extractor import get_available_dates
-            available_dates = get_available_dates(csv_content)
-            if available_dates:
-                st.caption(f"CSV内の日付: {available_dates[0]} 〜 {available_dates[-1]}（{len(available_dates)}日分）")
-            st.session_state["health_csv_content"] = csv_content
-        elif "health_csv_content" not in st.session_state:
-            st.info("Health Auto ExportアプリからエクスポートしたCSVをアップロードしてください")
-
-    else:
+    if True:
         # 入力方法の切り替え（スマホではカメラが便利）
         input_mode = st.radio(
             "③ 入力方法",
@@ -146,10 +130,6 @@ with col1:
                     del st.session_state["camera_photos"]
                     st.rerun()
 
-    # Health CSV以外でuploaded_filesが未定義にならないよう保証
-    if sheet_type == "health_csv":
-        uploaded_files = []
-
     # Nutrition のみ：食事タイプ選択 + 説明欄
     nutrition_description = ""
     nutrition_meal_type = "dinner"
@@ -181,75 +161,6 @@ with col1:
                 cols[i % 3].image(f, caption=f.name, use_container_width=True)
 
 with col2:
-    # ── Health CSV Import 専用フロー ──────────────────────────────────────────
-    if sheet_type == "health_csv":
-        csv_content = st.session_state.get("health_csv_content")
-        if not csv_content:
-            st.info("← Health Auto Export CSVをアップロードしてください")
-            st.stop()
-
-        if st.button("④ データを確認する", type="primary", use_container_width=True):
-            from extractors.health_csv_extractor import parse_health_csv
-            try:
-                data = parse_health_csv(csv_content, selected_date)
-                st.session_state["health_csv_data"] = data
-                st.session_state["health_csv_date"] = selected_date
-                st.session_state["health_csv_path"] = excel_path
-            except ValueError as e:
-                st.error(str(e))
-                st.stop()
-
-        if "health_csv_data" not in st.session_state:
-            st.stop()
-
-        data = st.session_state["health_csv_data"]
-        hw = data.get("hearwatch", {})
-        sl = data.get("sleep", {})
-
-        st.subheader("⑤ 抽出結果プレビュー")
-
-        import pandas as pd
-        from excel_writer.sleep_writer import SLEEP_ROW_MAP
-
-        label_map = {
-            "hearwatch.daily_bpm":                "Daily BPM (行7)",
-            "hearwatch.sleep_bpm":                "Sleep BPM (行9)",
-            "hearwatch.sleep_respiratory_rate":   "Sleep Resp. (行11)",
-            "hearwatch.sleep_hrv":                "Sleep HRV (行14)",
-            "hearwatch.waking_bpm":               "Waking BPM (行15)",
-            "sleep.total_sleep":                  "Total Sleep 分 (行21)",
-            "sleep.deep_sleep":                   "Deep Sleep 分 (行23)",
-        }
-        rows = []
-        for key, label in label_map.items():
-            sec, field = key.split(".", 1)
-            if sec == "hearwatch":
-                val = hw.get(field)
-            else:
-                val = (sl.get(field) or {}).get("total_minutes")
-            rows.append({"項目": label, "値": val, "備考": "空セルのみ書き込み（既存値はスキップ）"})
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
-
-        csv_date = st.session_state.get("health_csv_date", selected_date)
-        if st.button(f"⑥ Excelに書き込む（{csv_date} / 既存値はスキップ）",
-                     type="primary", use_container_width=True):
-            from excel_writer.sleep_writer import write_sleep_data
-            from excel_writer.writer_base import ExcelFileLockError
-            try:
-                write_sleep_data(data, csv_date,
-                                 st.session_state.get("health_csv_path", excel_path),
-                                 skip_existing=True)
-                st.success(f"✅ Sleep シートに書き込みました！（{csv_date} / 既存値はスキップ済み）")
-                del st.session_state["health_csv_data"]
-            except ExcelFileLockError as e:
-                st.error(str(e))
-            except Exception as e:
-                st.error(f"書き込みエラー: {e}")
-                import traceback
-                with st.expander("詳細"):
-                    st.code(traceback.format_exc())
-        st.stop()
-
     # ── 通常フロー（スクリーンショット） ──────────────────────────────────────
     # Nutrition はテキストのみでも動作可。それ以外は画像必須。
     if not uploaded_files:
@@ -311,12 +222,9 @@ with col2:
                     elif sheet_type == "inbody":
                         from extractors.inbody_extractor import extract_inbody_data
                         data = extract_inbody_data(tmp_path, provider, api_key)
-                    elif sheet_type == "morning":
-                        from extractors.morning_extractor import extract_morning_data
-                        data = extract_morning_data(tmp_path, provider, api_key)
-                    elif sheet_type == "night":
-                        from extractors.night_extractor import extract_night_data
-                        data = extract_night_data(tmp_path, provider, api_key)
+                    elif sheet_type == "workout":
+                        from extractors.workout_extractor import extract_workout_data
+                        data = extract_workout_data(tmp_path, provider, api_key)
 
                     all_results.append({"file": fname, "data": data, "status": "ok"})
 
@@ -451,12 +359,9 @@ with col2:
             elif sheet_type == "inbody":
                 from excel_writer.inbody_writer import build_inbody_preview
                 preview = build_inbody_preview(data, row_idx=2)
-            elif sheet_type == "morning":
-                from excel_writer.morning_writer import build_morning_preview
-                preview = build_morning_preview(data, row_idx=2, is_new=True)
-            elif sheet_type == "night":
-                from excel_writer.night_writer import build_night_preview
-                preview = build_night_preview(data, row_idx=2, is_new=True)
+            elif sheet_type == "workout":
+                from excel_writer.workout_writer import build_workout_preview
+                preview = build_workout_preview(data, row_idx=2)
 
             if sheet_type == "labs":
                 df = pd.DataFrame([{k: v for k, v in row.items() if not k.startswith("_")}
@@ -515,12 +420,9 @@ with col2:
                     elif sheet_type == "inbody":
                         from excel_writer.inbody_writer import write_inbody_data
                         write_inbody_data(merged, date_saved, excel_path_saved)
-                    elif sheet_type == "morning":
-                        from excel_writer.morning_writer import write_morning_data
-                        write_morning_data(merged, date_saved, excel_path_saved)
-                    elif sheet_type == "night":
-                        from excel_writer.night_writer import write_night_data
-                        write_night_data(merged, date_saved, excel_path_saved)
+                    elif sheet_type == "workout":
+                        from excel_writer.workout_writer import write_workout_data
+                        write_workout_data(merged, date_saved, excel_path_saved)
                     st.success(f"✅ {sheet_label} シートに書き込みました！（{date_saved}）")
 
                 # クラウドモード: 書き込み済みExcelをGoogle Driveに自動アップロード
