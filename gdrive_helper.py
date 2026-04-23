@@ -15,11 +15,13 @@ def _get_service():
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
-    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if not sa_json:
         raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が設定されていません")
 
-    sa_info = json.loads(sa_json)
+    # 余分な文字があっても最初の有効なJSONオブジェクトだけ取り出す
+    decoder = json.JSONDecoder()
+    sa_info, _ = decoder.raw_decode(sa_json)
     creds = service_account.Credentials.from_service_account_info(
         sa_info,
         scopes=["https://www.googleapis.com/auth/drive"],

@@ -353,8 +353,14 @@ with col2:
     all_results = st.session_state["all_results"]
     sheet_type_saved = st.session_state["sheet_type"]
     date_saved = st.session_state["selected_date"]
-    # サイドバーの現在値を優先（セッションキャッシュより新しいパスを使う）
-    excel_path_saved = excel_path
+    # クラウドモード: プレビュー用にDriveからダウンロード（セッションにキャッシュ）
+    if _IS_CLOUD:
+        if "cloud_excel_tmp_path" not in st.session_state:
+            from gdrive_helper import download_to_temp
+            st.session_state["cloud_excel_tmp_path"] = download_to_temp()
+        excel_path_saved = st.session_state["cloud_excel_tmp_path"]
+    else:
+        excel_path_saved = excel_path
     desc_saved = st.session_state.get("nutrition_description", "")
     meal_type_saved = st.session_state.get("nutrition_meal_type", "dinner")
 
@@ -522,6 +528,8 @@ with col2:
                     from gdrive_helper import upload_from_path
                     upload_from_path(excel_path_saved)
                     pathlib.Path(excel_path_saved).unlink(missing_ok=True)
+                    # キャッシュをクリア（次回は最新版をダウンロードする）
+                    st.session_state.pop("cloud_excel_tmp_path", None)
                     st.success("☁️ Google Driveに自動保存しました")
 
                 del st.session_state["all_results"]
