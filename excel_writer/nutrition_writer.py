@@ -88,6 +88,47 @@ def _recalc_day_macros(ws, col: int) -> None:
     ws.cell(NUTRITION_ROW_MAP["fat"],           col).value = round(fat, 1)     if fat     else None
 
 
+SUPPLEMENT_NAMES = [
+    "Mega Creatine",
+    "Super Fish Oil",
+    "Vitamin C",
+    "Vitamin B",
+    "Zinc",
+    "Vitamin D",
+    "Ashwagandha",
+    "Magnesium +Chelate",
+    "Melatonin",
+    "Coenzme Q10",
+    "D3 + K2 (4000NE)",
+]
+
+
+def write_supplement_data(taken: list, target_date, excel_path: str) -> int:
+    """チェックされたサプリを Excel に書き込む。戻り値: 書き込んだ件数"""
+    import datetime as _dt
+    writer = ExcelWriter(excel_path)
+    wb = writer.load()
+    ws = wb[SHEET_NAME]
+
+    if isinstance(target_date, str):
+        target_date = _dt.date.fromisoformat(target_date)
+
+    col_idx = ExcelWriter.find_date_column(ws, target_date)
+    if col_idx is None:
+        col_idx = ws.max_column + 1
+        ws.cell(row=1, column=col_idx).value = target_date.strftime("%Y.%m.%d")
+
+    count = 0
+    for row in range(1, ws.max_row + 1):
+        label = ws.cell(row, 1).value
+        if label in taken:
+            ws.cell(row, col_idx).value = "✓"
+            count += 1
+
+    writer.save(wb)
+    return count
+
+
 def build_nutrition_preview(data: dict, meal_type: str, col_idx: int) -> list[dict]:
     meal_key = meal_type.lower()
     meal_row = MEAL_ROW.get(meal_key, 2)

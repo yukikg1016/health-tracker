@@ -130,7 +130,7 @@ with col1:
                     del st.session_state["camera_photos"]
                     st.rerun()
 
-    # Nutrition のみ：食事タイプ選択 + 説明欄
+    # Nutrition のみ：食事タイプ選択 + 説明欄 + サプリ
     nutrition_description = ""
     nutrition_meal_type = "dinner"
     if sheet_type == "nutrition":
@@ -148,6 +148,31 @@ with col1:
             height=100,
             help="複数画像の場合、この説明は全画像に共通で使われます",
         )
+        st.markdown("---")
+        st.caption("💊 サプリメント（今日飲んだものをチェック）")
+        from excel_writer.nutrition_writer import SUPPLEMENT_NAMES
+        supplement_cols = st.columns(2)
+        selected_supplements = []
+        for i, name in enumerate(SUPPLEMENT_NAMES):
+            if supplement_cols[i % 2].checkbox(name, key=f"supp_{name}"):
+                selected_supplements.append(name)
+        if selected_supplements and st.button("💊 サプリを書き込む", use_container_width=True):
+            with st.spinner("書き込み中..."):
+                try:
+                    if _IS_CLOUD:
+                        from gdrive_helper import download_to_temp, upload_from_path
+                        _supp_path = download_to_temp()
+                    else:
+                        _supp_path = excel_path
+                    from excel_writer.nutrition_writer import write_supplement_data
+                    n = write_supplement_data(selected_supplements, selected_date, _supp_path)
+                    if _IS_CLOUD:
+                        upload_from_path(_supp_path)
+                        pathlib.Path(_supp_path).unlink(missing_ok=True)
+                        st.session_state.pop("cloud_excel_tmp_path", None)
+                    st.success(f"✅ {n} 件のサプリを書き込みました（{selected_date}）")
+                except Exception as e:
+                    st.error(f"書き込みエラー: {e}")
 
     # ファイル選択モードのみプレビュー表示（カメラモードは上で表示済み）
     _input_mode = locals().get("input_mode", "📁 ファイルを選ぶ")
