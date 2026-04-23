@@ -267,8 +267,11 @@ with col2:
         if not api_key:
             st.error("APIキーを入力してください（サイドバー）")
             st.stop()
-        if not pathlib.Path(excel_path).exists():
+        if not _IS_CLOUD and (not excel_path or not pathlib.Path(excel_path).exists()):
             st.error(f"Excelファイルが見つかりません: {excel_path}")
+            st.stop()
+        if _IS_CLOUD and not st.session_state.get("cloud_excel_bytes"):
+            st.error("← サイドバーからExcelファイル（Yuki データ.xlsx）をアップロードしてください")
             st.stop()
 
         all_results = []
