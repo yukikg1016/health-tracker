@@ -28,7 +28,7 @@ def _get_service():
 
 
 def download_to_temp() -> str:
-    """GoogleドライブのExcelを一時ファイルにダウンロードしてパスを返す"""
+    """GoogleドライブのファイルをExcel形式で一時ファイルにダウンロードしてパスを返す"""
     from googleapiclient.http import MediaIoBaseDownload
 
     file_id = os.environ.get("GDRIVE_FILE_ID")
@@ -36,7 +36,21 @@ def download_to_temp() -> str:
         raise ValueError("GDRIVE_FILE_ID が設定されていません")
 
     service = _get_service()
-    request = service.files().get_media(fileId=file_id)
+
+    # ファイルのMIMEタイプを確認
+    meta = service.files().get(fileId=file_id, fields="mimeType").execute()
+    mime = meta.get("mimeType", "")
+
+    if mime == "application/vnd.google-apps.spreadsheet":
+        # Google Sheets形式 → xlsxとしてエクスポート
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        # 通常のExcelファイル
+        request = service.files().get_media(fileId=file_id)
+
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
     done = False
