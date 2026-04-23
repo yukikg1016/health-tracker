@@ -68,15 +68,13 @@ with st.sidebar:
         help="環境変数 GEMINI_API_KEY / ANTHROPIC_API_KEY でも設定可能",
     )
 
-    # クラウドモード：Excelをアップロードして使う
+    # クラウドモード：Google Drive連携
     if _IS_CLOUD:
-        st.divider()
-        st.caption("📤 Excelファイルをアップロード")
-        excel_upload = st.file_uploader("Yuki データ.xlsx", type=["xlsx"], key="excel_upload")
-        if excel_upload:
-            st.session_state["cloud_excel_bytes"] = excel_upload.read()
-            st.session_state["cloud_excel_name"] = excel_upload.name
-            st.success(f"✅ {excel_upload.name}")
+        from gdrive_helper import is_configured
+        if is_configured():
+            st.caption("☁️ Google Drive連携 有効")
+        else:
+            st.caption("⚠️ Google Drive未設定（SecretsにGDRIVE_FILE_IDとGOOGLE_SERVICE_ACCOUNT_JSONが必要）")
         excel_path = None  # クラウドではパス不要
     else:
         excel_path = st.text_input("Excelファイルパス", value=DEFAULT_EXCEL, key="excel_path_input")
@@ -270,9 +268,11 @@ with col2:
         if not _IS_CLOUD and (not excel_path or not pathlib.Path(excel_path).exists()):
             st.error(f"Excelファイルが見つかりません: {excel_path}")
             st.stop()
-        if _IS_CLOUD and not st.session_state.get("cloud_excel_bytes"):
-            st.error("← サイドバーからExcelファイル（Yuki データ.xlsx）をアップロードしてください")
-            st.stop()
+        if _IS_CLOUD:
+            from gdrive_helper import is_configured
+            if not is_configured():
+                st.error("Google Drive未設定です。SecretsにGDRIVE_FILE_IDとGOOGLE_SERVICE_ACCOUNT_JSONを追加してください")
+                st.stop()
 
         all_results = []
 
@@ -486,16 +486,10 @@ with col2:
 
         with st.spinner("Excelに書き込み中..."):
             try:
-                # クラウドモード: アップロードされたExcelを一時ファイルに書き出して処理
+                # クラウドモード: Google DriveからExcelをダウンロードして処理
                 if _IS_CLOUD:
-                    cloud_bytes = st.session_state.get("cloud_excel_bytes")
-                    if not cloud_bytes:
-                        st.error("サイドバーからExcelファイルをアップロードしてください")
-                        st.stop()
-                    tmp_excel = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-                    tmp_excel.write(cloud_bytes)
-                    tmp_excel.flush()
-                    excel_path_saved = tmp_excel.name
+                    from gdrive_helper import download_to_temp
+                    excel_path_saved = download_to_temp()
 
                 if sheet_type == "nutrition":
                     from excel_writer.nutrition_writer import write_nutrition_data
@@ -523,12 +517,12 @@ with col2:
                         write_night_data(merged, date_saved, excel_path_saved)
                     st.success(f"✅ {sheet_label} シートに書き込みました！（{date_saved}）")
 
-                # クラウドモード: 書き込み済みExcelをダウンロードボタンで返す
+                # クラウドモード: 書き込み済みExcelをGoogle Driveに自動アップロード
                 if _IS_CLOUD:
-                    with open(excel_path_saved, "rb") as f:
-                        st.session_state["download_bytes"] = f.read()
-                    st.session_state["download_name"] = st.session_state.get("cloud_excel_name", "Yuki データ.xlsx")
+                    from gdrive_helper import upload_from_path
+                    upload_from_path(excel_path_saved)
                     pathlib.Path(excel_path_saved).unlink(missing_ok=True)
+                    st.success("☁️ Google Driveに自動保存しました")
 
                 del st.session_state["all_results"]
 
