@@ -21,13 +21,26 @@ load_dotenv(BASE_DIR / ".env")
 # ── パスワード保護 ────────────────────────────────────────────────────────────
 def _check_password() -> bool:
     correct = os.environ.get("APP_PASSWORD", "yukihealth2026")
+
+    # クッキーで永続ログイン
+    try:
+        from cookies_controller import CookieController
+        _cookie = CookieController()
+        if _cookie.get("ht_auth") == "ok":
+            st.session_state["authenticated"] = True
+    except Exception:
+        _cookie = None
+
     if st.session_state.get("authenticated"):
         return True
+
     st.markdown("## 🔐 Health Tracker")
     pw = st.text_input("パスワードを入力してください", type="password", key="pw_input")
     if st.button("ログイン", type="primary"):
         if pw == correct:
             st.session_state["authenticated"] = True
+            if _cookie:
+                _cookie.set("ht_auth", "ok", max_age=30 * 24 * 60 * 60)  # 30日間
             st.rerun()
         else:
             st.error("パスワードが違います")
