@@ -468,21 +468,21 @@ with col2:
                         from excel_writer.inbody_writer import write_inbody_data
                         write_inbody_data(merged, date_saved, excel_path_saved)
                     elif sheet_type == "workout":
-                        from excel_writer.workout_writer import write_workout_data
+                        from excel_writer.workout_writer import write_workout_data, _get_row_map
                         import openpyxl as _opx
+                        from excel_writer.writer_base import ExcelWriter as _EW
                         _wb_dbg = _opx.load_workbook(excel_path_saved)
                         _ws_dbg = None
                         for _n in _wb_dbg.sheetnames:
                             if _n.strip().lower() == "workout":
                                 _ws_dbg = _wb_dbg[_n]
                                 break
-                        if _ws_dbg:
-                            _row1 = [_ws_dbg.cell(1, c).value for c in range(1, min(_ws_dbg.max_column+1, 15))]
-                            st.info(f"🔍 シート名: {_n} | 行1: {_row1} | 書き込み日付: {date_saved}")
-                        else:
-                            st.warning(f"⚠️ Workoutシートが見つかりません。シート一覧: {_wb_dbg.sheetnames}")
-                        # 複数スクショを全部書き込む（各ワークアウトタイプ別）
-                        for r in ok_results:
+                        _col = _EW.find_date_column(_ws_dbg, date_saved) if _ws_dbg else None
+                        for _ridx, r in enumerate(ok_results):
+                            _wtype = r["data"].get("workout_type", "NONE")
+                            _rmap = _get_row_map(_wtype)
+                            _fields = {k: r["data"].get(k) for k in _rmap if r["data"].get(k) is not None}
+                            st.info(f"🔍 [{_ridx+1}] type={_wtype} | col={_col} | 書き込みフィールド: {_fields}")
                             write_workout_data(r["data"], date_saved, excel_path_saved)
                     st.success(f"✅ {sheet_label} シートに書き込みました！（{date_saved}）")
 
