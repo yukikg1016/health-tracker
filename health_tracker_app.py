@@ -18,18 +18,24 @@ sys.path.insert(0, str(BASE_DIR))
 # .env 読み込み
 load_dotenv(BASE_DIR / ".env")
 
+# ── クッキー初期化（モジュールレベルで必須）────────────────────────────────
+try:
+    from streamlit_cookies_controller import CookieController
+    _cookie = CookieController()
+except Exception:
+    _cookie = None
+
 # ── パスワード保護 ────────────────────────────────────────────────────────────
 def _check_password() -> bool:
     correct = os.environ.get("APP_PASSWORD", "yukihealth2026")
 
-    # クッキーで永続ログイン
-    try:
-        from cookies_controller import CookieController
-        _cookie = CookieController()
-        if _cookie.get("ht_auth") == "ok":
-            st.session_state["authenticated"] = True
-    except Exception:
-        _cookie = None
+    # クッキーで永続ログイン確認
+    if _cookie is not None:
+        try:
+            if _cookie.get("ht_auth") == "ok":
+                st.session_state["authenticated"] = True
+        except Exception:
+            pass
 
     if st.session_state.get("authenticated"):
         return True
@@ -39,8 +45,11 @@ def _check_password() -> bool:
     if st.button("ログイン", type="primary"):
         if pw == correct:
             st.session_state["authenticated"] = True
-            if _cookie:
-                _cookie.set("ht_auth", "ok", max_age=30 * 24 * 60 * 60)  # 30日間
+            if _cookie is not None:
+                try:
+                    _cookie.set("ht_auth", "ok", max_age=30 * 24 * 60 * 60)  # 30日間
+                except Exception:
+                    pass
             st.rerun()
         else:
             st.error("パスワードが違います")
