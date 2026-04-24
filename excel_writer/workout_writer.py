@@ -70,7 +70,15 @@ def write_workout_data(data: dict, target_date, excel_path: str) -> None:
 
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = wb[SHEET_NAME]
+
+    # シート名を柔軟に検索（大文字小文字・スペース無視）
+    ws = None
+    for name in wb.sheetnames:
+        if name.strip().lower() == SHEET_NAME.lower():
+            ws = wb[name]
+            break
+    if ws is None:
+        raise ValueError(f"Workoutシートが見つかりません。シート一覧: {wb.sheetnames}")
 
     # Find or create date column
     col_idx = ExcelWriter.find_date_column(ws, target_date)

@@ -469,7 +469,9 @@ with col2:
                         write_inbody_data(merged, date_saved, excel_path_saved)
                     elif sheet_type == "workout":
                         from excel_writer.workout_writer import write_workout_data
-                        write_workout_data(merged, date_saved, excel_path_saved)
+                        # 複数スクショを全部書き込む（各ワークアウトタイプ別）
+                        for r in ok_results:
+                            write_workout_data(r["data"], date_saved, excel_path_saved)
                     st.success(f"✅ {sheet_label} シートに書き込みました！（{date_saved}）")
 
                 # クラウドモード: 書き込み済みExcelをGoogle Driveに自動アップロード
