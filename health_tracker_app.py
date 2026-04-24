@@ -469,6 +469,18 @@ with col2:
                         write_inbody_data(merged, date_saved, excel_path_saved)
                     elif sheet_type == "workout":
                         from excel_writer.workout_writer import write_workout_data
+                        import openpyxl as _opx
+                        _wb_dbg = _opx.load_workbook(excel_path_saved)
+                        _ws_dbg = None
+                        for _n in _wb_dbg.sheetnames:
+                            if _n.strip().lower() == "workout":
+                                _ws_dbg = _wb_dbg[_n]
+                                break
+                        if _ws_dbg:
+                            _row1 = [_ws_dbg.cell(1, c).value for c in range(1, min(_ws_dbg.max_column+1, 15))]
+                            st.info(f"🔍 シート名: {_n} | 行1: {_row1} | 書き込み日付: {date_saved}")
+                        else:
+                            st.warning(f"⚠️ Workoutシートが見つかりません。シート一覧: {_wb_dbg.sheetnames}")
                         # 複数スクショを全部書き込む（各ワークアウトタイプ別）
                         for r in ok_results:
                             write_workout_data(r["data"], date_saved, excel_path_saved)
