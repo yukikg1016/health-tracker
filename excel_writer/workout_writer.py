@@ -102,5 +102,5 @@ def build_workout_preview(data: dict, row_idx: int) -> list:
     for key, label, category in field_map:
         val = data.get(key)
         if val is not None:
-            rows.append({"項目": label, "値": val, "カテゴリ": category, "書き込み先": f"行{row_idx}"})
+            rows.append({"項目": label, "値": val, "カテゴリ": category})
     return rows
