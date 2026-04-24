@@ -63,11 +63,12 @@ _IS_CLOUD = not (pathlib.Path.home() / "　Reasearch" / "Yuki データ.xlsx").e
 DEFAULT_EXCEL = str(pathlib.Path.home() / "　Reasearch" / "Yuki データ.xlsx")
 
 SHEET_OPTIONS = {
-    "🍽️ Nutrition（食事・栄養）": "nutrition",
-    "😴 Sleep（睡眠）":           "sleep",
-    "🩸 Labs（血液検査）":         "labs",
-    "⚖️ In Body（体組成）":       "inbody",
-    "💪 Workout":                 "workout",
+    "🍽️ Nutrition（食事・栄養）":    "nutrition",
+    "😴 Sleep（睡眠）":              "sleep",
+    "🩸 Labs（血液検査）":            "labs",
+    "⚖️ In Body（体組成）":          "inbody",
+    "💪 Workout":                    "workout",
+    "🏋️ Performance（体力測定）":    "performance",
 }
 
 _PORT = os.environ.get("PORT", "8501")
@@ -152,6 +153,16 @@ with col1:
                     del st.session_state["camera_photos"]
                     st.rerun()
 
+    # Performance のみ：テキスト入力欄（任意）
+    performance_text = ""
+    if sheet_type == "performance":
+        st.markdown("---")
+        performance_text = st.text_area(
+            "③ 直接入力（任意）",
+            placeholder="例：Push up: 30, Chin up: 12, Squat: 50\n（スクリーンショットがなければここに数字を入力してください）",
+            height=80,
+        )
+
     # Nutrition のみ：食事タイプ選択 + 説明欄 + サプリ
     nutrition_description = ""
     nutrition_meal_type = "dinner"
@@ -209,16 +220,24 @@ with col1:
 
 with col2:
     # ── 通常フロー（スクリーンショット） ──────────────────────────────────────
-    # Nutrition はテキストのみでも動作可。それ以外は画像必須。
+    # Nutrition/Performance はテキストのみでも動作可。それ以外は画像必須。
     if not uploaded_files:
-        if sheet_type != "nutrition":
-            st.info("← スクリーンショットをアップロードしてください（複数可）")
-            st.stop()
-        elif not nutrition_description.strip():
+        if sheet_type == "nutrition" and not nutrition_description.strip():
             st.info("← 画像をアップロードするか、食事の説明を入力してください")
             st.stop()
+        elif sheet_type == "performance" and not performance_text.strip():
+            st.info("← スクリーンショットをアップロードするか、上のテキスト欄に数値を入力してください")
+            st.stop()
+        elif sheet_type not in ("nutrition", "performance"):
+            st.info("← スクリーンショットをアップロードしてください（複数可）")
+            st.stop()
 
-    extract_btn_label = "⑥ データを抽出する" if sheet_type == "nutrition" else "④ データを抽出する"
+    if sheet_type == "nutrition":
+        extract_btn_label = "⑥ データを抽出する"
+    elif sheet_type == "performance":
+        extract_btn_label = "④ データを確認する"
+    else:
+        extract_btn_label = "④ データを抽出する"
     if st.button(extract_btn_label, type="primary", use_container_width=True):
         if not api_key:
             st.error("APIキーを入力してください（サイドバー）")
@@ -234,9 +253,9 @@ with col2:
 
         all_results = []
 
-        # Nutrition で画像なしの場合はテキストのみで1件処理
-        if sheet_type == "nutrition" and not uploaded_files:
-            spinner_msg = "AIがテキストから栄養値を推定中..."
+        # Nutrition/Performance で画像なしの場合はテキストのみで1件処理
+        if sheet_type in ("nutrition", "performance") and not uploaded_files:
+            spinner_msg = "AIがテキストから値を推定中..."
             fake_files = [None]  # ダミー1件
         else:
             spinner_msg = f"AIが {len(uploaded_files)} 枚を解析中..."
@@ -272,6 +291,10 @@ with col2:
                     elif sheet_type == "workout":
                         from extractors.workout_extractor import extract_workout_data
                         data = extract_workout_data(tmp_path, provider, api_key)
+                    elif sheet_type == "performance":
+                        from extractors.performance_extractor import extract_performance_data
+                        data = extract_performance_data(tmp_path, provider, api_key,
+                                                        text=performance_text)
 
                     all_results.append({"file": fname, "data": data, "status": "ok"})
 
@@ -300,6 +323,7 @@ with col2:
         st.session_state["excel_path"] = excel_path
         st.session_state["nutrition_description"] = nutrition_description
         st.session_state["nutrition_meal_type"] = nutrition_meal_type
+        st.session_state["performance_text"] = performance_text
 
     # ── プレビュー ─────────────────────────────────────────────────────────────
     if "all_results" not in st.session_state:
@@ -406,9 +430,16 @@ with col2:
             elif sheet_type == "inbody":
                 from excel_writer.inbody_writer import build_inbody_preview
                 preview = build_inbody_preview(data, row_idx=2)
-            elif sheet_type == "workout":
+            elif sheet_type in ("workout", "performance"):
                 from excel_writer.workout_writer import build_workout_preview
-                preview = build_workout_preview(data, row_idx=2)
+                import openpyxl as _opx_pv
+                try:
+                    _wb_pv = _opx_pv.load_workbook(excel_path_saved)
+                    _ws_pv = next((s for n, s in [(n, _wb_pv[n]) for n in _wb_pv.sheetnames]
+                                   if n.strip().lower() == "workout"), None)
+                except Exception:
+                    _ws_pv = None
+                preview = build_workout_preview(data, row_idx=2, ws=_ws_pv)
 
             if sheet_type == "labs":
                 df = pd.DataFrame([{k: v for k, v in row.items() if not k.startswith("_")}
@@ -467,24 +498,23 @@ with col2:
                     elif sheet_type == "inbody":
                         from excel_writer.inbody_writer import write_inbody_data
                         write_inbody_data(merged, date_saved, excel_path_saved)
-                    elif sheet_type == "workout":
-                        from excel_writer.workout_writer import write_workout_data, _get_row_map
-                        import openpyxl as _opx
-                        from excel_writer.writer_base import ExcelWriter as _EW
-                        _wb_dbg = _opx.load_workbook(excel_path_saved)
-                        _ws_dbg = None
-                        for _n in _wb_dbg.sheetnames:
-                            if _n.strip().lower() == "workout":
-                                _ws_dbg = _wb_dbg[_n]
-                                break
-                        _col = _EW.find_date_column(_ws_dbg, date_saved) if _ws_dbg else None
-                        for _ridx, r in enumerate(ok_results):
-                            _wtype = r["data"].get("workout_type", "NONE")
-                            _rmap = _get_row_map(_wtype)
-                            _fields = {k: r["data"].get(k) for k in _rmap if r["data"].get(k) is not None}
-                            st.info(f"🔍 [{_ridx+1}] type={_wtype} | col={_col} | 書き込みフィールド: {_fields}")
-                            write_workout_data(r["data"], date_saved, excel_path_saved)
-                    st.success(f"✅ {sheet_label} シートに書き込みました！（{date_saved}）")
+                    elif sheet_type in ("workout", "performance"):
+                        from excel_writer.workout_writer import write_workout_data, get_column_a_dump
+                        # Show column A structure for debugging row placement
+                        try:
+                            col_a = get_column_a_dump(excel_path_saved)
+                            if col_a:
+                                with st.expander("🔍 Workout sheet 行構造（デバッグ）", expanded=False):
+                                    import pandas as pd
+                                    st.dataframe(pd.DataFrame(col_a, columns=["行", "列A", "列B"]),
+                                                 use_container_width=True)
+                        except Exception as _de:
+                            st.caption(f"デバッグ情報取得失敗: {_de}")
+                        for r in ok_results:
+                            dbg = write_workout_data(r["data"], date_saved, excel_path_saved)
+                            st.caption(f"✍️ {dbg.get('workout_type')} → col {dbg.get('col')} | "
+                                       f"書き込み: {list(dbg.get('written', {}).keys())}")
+                    st.success(f"✅ Workout シートに書き込みました！（{date_saved}）")
 
                 # クラウドモード: 書き込み済みExcelをGoogle Driveに自動アップロード
                 if _IS_CLOUD:
