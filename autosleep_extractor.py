@@ -119,6 +119,13 @@ Field mapping hints (Japanese → JSON key):
 - 呼吸数 平均 → respiration_rate_avg
 - 呼吸数 範囲 → respiration_rate_range
 
+AutoSleep icon mapping (icons shown next to durations in the sleep quality card):
+- ☾ or moon icon = total_sleep (e.g. "☾ 6時間59分" → total_sleep)
+- ★ or star icon = quality sleep / sleep_quality duration (NOT deep sleep)
+- ② or circled-2 icon = deep_sleep (e.g. "② 2時間44分" → deep_sleep hours:2, minutes:44, total_minutes:164)
+- ♥ or heart icon = bpm_sleep_avg heart rate value
+- 睡眠バンク / 睡眠の評価 card percentage with "借金" = sleep_bank_balance
+
 Return JSON only. No explanation, no markdown fences.
 """
 
