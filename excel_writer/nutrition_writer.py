@@ -48,6 +48,26 @@ _TRACKING_ROWS = {
 }
 
 
+def find_time_row(ws, meal_type: str) -> int | None:
+    """列Aを走査して 'Breakfast time' / 'Lunch time' / 'Dinner time' 等の行番号を返す。"""
+    meal_key = meal_type.lower()
+    search_terms = {
+        "breakfast": ["breakfast time", "朝食 time", "朝time", "朝食時間"],
+        "lunch":     ["lunch time", "昼食 time", "昼time", "昼食時間"],
+        "dinner":    ["dinner time", "夕食 time", "夜time", "夕食時間"],
+        "snacks":    ["snack time", "間食 time", "snacks time", "間食時間"],
+    }.get(meal_key, [])
+
+    for row in range(1, ws.max_row + 1):
+        val = ws.cell(row, 1).value
+        if val is None:
+            continue
+        val_l = str(val).lower().strip()
+        if any(t in val_l for t in search_terms):
+            return row
+    return None
+
+
 def _ensure_tracking_labels(ws) -> None:
     """追跡行のラベルが存在しなければ初期化する（A列）。"""
     labels = {
@@ -155,6 +175,7 @@ def write_nutrition_data(
     target_date: datetime.date,
     meal_type: str,
     excel_path: str,
+    meal_time: str = "",
 ) -> list[dict]:
     """
     Nutritionシートに書き込む。
@@ -205,6 +226,12 @@ def write_nutrition_data(
 
     # ⑤ 1日のマクロ合計を再計算して行11/13/15に書き込み
     _recalc_day_macros(ws, col_idx)
+
+    # ⑥ 食事時間を書き込む（列Aからラベル行を検索）
+    if meal_time and meal_time.strip():
+        time_row = find_time_row(ws, meal_type)
+        if time_row is not None:
+            ws.cell(row=time_row, column=col_idx).value = meal_time.strip()
 
     writer.save(wb)
     return preview

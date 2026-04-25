@@ -166,6 +166,7 @@ with col1:
     # Nutrition のみ：食事タイプ選択 + 説明欄 + サプリ
     nutrition_description = ""
     nutrition_meal_type = "dinner"
+    nutrition_meal_time = ""
     if sheet_type == "nutrition":
         st.markdown("---")
         nutrition_meal_type = st.selectbox(
@@ -175,8 +176,13 @@ with col1:
                                     "dinner": "🌙 Dinner（夕食）", "snacks": "🍎 Snacks（間食）"}[x],
             index=2,
         )
+        nutrition_meal_time = st.text_input(
+            "⑤ 食事時間（任意）",
+            placeholder="例：午後1時、13:00、8:30",
+            help="Breakfast time / Lunch time / Dinner time 行に書き込まれます",
+        )
         nutrition_description = st.text_area(
-            "⑤ 食事の説明（任意）",
+            "⑥ 食事の説明（任意）",
             placeholder="例：チキンカレー（ご飯200g、カレールー150g）、サラダ、水\n食材・量・料理名を書くとAIの精度が上がります",
             height=100,
             help="複数画像の場合、この説明は全画像に共通で使われます",
@@ -323,6 +329,7 @@ with col2:
         st.session_state["excel_path"] = excel_path
         st.session_state["nutrition_description"] = nutrition_description
         st.session_state["nutrition_meal_type"] = nutrition_meal_type
+        st.session_state["nutrition_meal_time"] = nutrition_meal_time
         st.session_state["performance_text"] = performance_text
 
     # ── プレビュー ─────────────────────────────────────────────────────────────
@@ -342,6 +349,7 @@ with col2:
         excel_path_saved = excel_path
     desc_saved = st.session_state.get("nutrition_description", "")
     meal_type_saved = st.session_state.get("nutrition_meal_type", "dinner")
+    meal_time_saved = st.session_state.get("nutrition_meal_time", "")
 
     if sheet_type_saved != sheet_type:
         del st.session_state["all_results"]
@@ -483,7 +491,8 @@ with col2:
                 if sheet_type == "nutrition":
                     from excel_writer.nutrition_writer import write_nutrition_data
                     merged_nutrition = merge_dicts([r["data"] for r in ok_results])
-                    write_nutrition_data(merged_nutrition, date_saved, meal_type_saved, excel_path_saved)
+                    write_nutrition_data(merged_nutrition, date_saved, meal_type_saved, excel_path_saved,
+                                         meal_time=meal_time_saved)
                     meal_label = {"breakfast": "Breakfast", "lunch": "Lunch",
                                   "dinner": "Dinner", "snacks": "Snacks"}.get(meal_type_saved, meal_type_saved)
                     st.success(f"✅ Nutrition シート [{meal_label}] に書き込みました！（{date_saved}）")
