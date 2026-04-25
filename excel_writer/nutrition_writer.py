@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 """NutritionシートへのExcel書き込み（行=項目、列=日付 の形式）"""
+# v2 — meal_time support added
 
 import datetime
 from .writer_base import ExcelWriter
