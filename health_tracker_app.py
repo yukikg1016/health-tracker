@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 BASE_DIR = pathlib.Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
+# ── カスタムモジュールのキャッシュを毎回クリア（デプロイ後の古いコード防止）──
+for _mn in [k for k in list(sys.modules.keys())
+            if k.startswith(("excel_writer", "extractors", "gdrive_helper", "autosleep"))]:
+    del sys.modules[_mn]
+
 # .env 読み込み
 load_dotenv(BASE_DIR / ".env")
 
@@ -491,31 +496,8 @@ with col2:
                 if sheet_type == "nutrition":
                     from excel_writer.nutrition_writer import write_nutrition_data
                     merged_nutrition = merge_dicts([r["data"] for r in ok_results])
-                    # meal_time は nutrition_writer が古い場合に備え別途書き込む
-                    try:
-                        write_nutrition_data(merged_nutrition, date_saved, meal_type_saved, excel_path_saved,
-                                             meal_time=meal_time_saved)
-                    except TypeError:
-                        write_nutrition_data(merged_nutrition, date_saved, meal_type_saved, excel_path_saved)
-                        # 食事時間を直接書き込む（nutrition_writerのバージョン互換）
-                        if meal_time_saved and meal_time_saved.strip():
-                            import openpyxl as _opx_t
-                            from excel_writer.writer_base import ExcelWriter as _EW_t
-                            _wb_t = _opx_t.load_workbook(excel_path_saved)
-                            _ws_t = _wb_t["Nutrition"]
-                            _col_t = _EW_t.find_date_column(_ws_t, date_saved) or _ws_t.max_column
-                            _meal_terms = {
-                                "breakfast": ["breakfast time", "朝食時間"],
-                                "lunch":     ["lunch time", "昼食時間"],
-                                "dinner":    ["dinner time", "夕食時間"],
-                                "snacks":    ["snack time", "間食時間"],
-                            }.get(meal_type_saved.lower(), [])
-                            for _r in range(1, _ws_t.max_row + 1):
-                                _v = str(_ws_t.cell(_r, 1).value or "").lower()
-                                if any(_t in _v for _t in _meal_terms):
-                                    _ws_t.cell(_r, _col_t).value = meal_time_saved.strip()
-                                    break
-                            _wb_t.save(excel_path_saved)
+                    write_nutrition_data(merged_nutrition, date_saved, meal_type_saved, excel_path_saved,
+                                         meal_time=meal_time_saved)
                     meal_label = {"breakfast": "Breakfast", "lunch": "Lunch",
                                   "dinner": "Dinner", "snacks": "Snacks"}.get(meal_type_saved, meal_type_saved)
                     st.success(f"✅ Nutrition シート [{meal_label}] に書き込みました！（{date_saved}）")
