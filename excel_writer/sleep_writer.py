@@ -106,6 +106,15 @@ def write_sleep_data(
             val = section_data.get(field)
 
         if val is not None:
+            # dict が来た場合は total_minutes → hours 順に変換
+            if isinstance(val, dict):
+                if "total_minutes" in val:
+                    val = val["total_minutes"]
+                elif "hours" in val and "minutes" in val:
+                    val = val["hours"] * 60 + val["minutes"]
+                else:
+                    continue  # 変換できない辞書はスキップ
+
             cell = ws.cell(row=row_idx, column=col_idx)
             # skip_existing=True の場合、既存値があればスキップ
             if skip_existing and cell.value is not None:
