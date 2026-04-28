@@ -697,9 +697,15 @@ with tab_input:
                         def merge_dicts(dicts):
                             merged = {}
                             for d in dicts:
+                                if not isinstance(d, dict):
+                                    continue
                                 for k, v in d.items():
                                     if v is not None:
-                                        merged[k] = merge_dicts([merged.get(k, {}), v]) if isinstance(v, dict) else v
+                                        existing = merged.get(k, {})
+                                        if isinstance(v, dict) and isinstance(existing, dict):
+                                            merged[k] = merge_dicts([existing, v])
+                                        else:
+                                            merged[k] = v
                             return merged
 
                         if sheet_type == "nutrition":
