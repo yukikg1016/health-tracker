@@ -17,7 +17,8 @@ sys.path.insert(0, str(BASE_DIR))
 
 # ── カスタムモジュールのキャッシュを毎回クリア（デプロイ後の古いコード防止）──
 for _mn in [k for k in list(sys.modules.keys())
-            if k.startswith(("excel_writer", "extractors", "gdrive_helper", "autosleep"))]:
+            if k.startswith(("excel_writer", "extractors", "gdrive_helper", "autosleep",
+                              "dashboard_reader", "dashboard_ui"))]:
     del sys.modules[_mn]
 
 # .env 読み込み
