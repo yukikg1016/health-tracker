@@ -98,7 +98,8 @@ def build_labs_preview(ws, results: list[dict], col_idx: int) -> list[dict]:
     return rows
 
 
-def write_labs_data(results: list[dict], target_date: datetime.date, excel_path: str) -> list[dict]:
+def write_labs_data(results: list[dict], target_date: datetime.date, excel_path: str,
+                    sheet_prefix: str = "") -> list[dict]:
     """
     Labsシートに書き込む。信頼度 < FUZZY_CUTOFF のものはスキップ。
 
@@ -107,7 +108,7 @@ def write_labs_data(results: list[dict], target_date: datetime.date, excel_path:
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = wb[ExcelWriter.SHEET_LABS]
+    ws = ExcelWriter.get_sheet(wb, sheet_prefix + ExcelWriter.SHEET_LABS)
 
     col_idx = _find_or_create_date_col(ws, target_date)
     preview = build_labs_preview(ws, results, col_idx)

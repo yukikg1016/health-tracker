@@ -151,7 +151,8 @@ def _get_row_map(workout_type: str, ws=None) -> dict:
     return _FALLBACK_ROWS.get(key, _FALLBACK_ROWS.get("core training", {}))
 
 
-def write_workout_data(data: dict, target_date, excel_path: str) -> dict:
+def write_workout_data(data: dict, target_date, excel_path: str,
+                       sheet_prefix: str = "") -> dict:
     """Write workout data. Returns debug info dict."""
     if isinstance(target_date, str):
         target_date = datetime.date.fromisoformat(target_date)
@@ -161,8 +162,9 @@ def write_workout_data(data: dict, target_date, excel_path: str) -> dict:
 
     # Find sheet (flexible name matching)
     ws = None
+    target_name = (sheet_prefix + SHEET_NAME).strip().lower()
     for name in wb.sheetnames:
-        if name.strip().lower() == SHEET_NAME.lower():
+        if name.strip().lower() == target_name:
             ws = wb[name]
             break
     if ws is None:
@@ -217,12 +219,13 @@ def write_workout_data(data: dict, target_date, excel_path: str) -> dict:
     return debug
 
 
-def get_column_a_dump(excel_path: str) -> list:
+def get_column_a_dump(excel_path: str, sheet_prefix: str = "") -> list:
     """Return list of (row, col_a_value, col_b_value) for debugging."""
     wb = openpyxl.load_workbook(excel_path)
     ws = None
+    target_name = (sheet_prefix + SHEET_NAME).strip().lower()
     for name in wb.sheetnames:
-        if name.strip().lower() == SHEET_NAME.lower():
+        if name.strip().lower() == target_name:
             ws = wb[name]
             break
     if ws is None:

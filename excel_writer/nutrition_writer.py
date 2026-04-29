@@ -124,12 +124,13 @@ SUPPLEMENT_NAMES = [
 ]
 
 
-def write_supplement_data(taken: list, target_date, excel_path: str) -> int:
+def write_supplement_data(taken: list, target_date, excel_path: str,
+                           sheet_prefix: str = "") -> int:
     """チェックされたサプリを Excel に書き込む。戻り値: 書き込んだ件数"""
     import datetime as _dt
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = wb[SHEET_NAME]
+    ws = ExcelWriter.get_sheet(wb, sheet_prefix + SHEET_NAME)
 
     if isinstance(target_date, str):
         target_date = _dt.date.fromisoformat(target_date)
@@ -177,6 +178,7 @@ def write_nutrition_data(
     meal_type: str,
     excel_path: str,
     meal_time: str = "",
+    sheet_prefix: str = "",
 ) -> list[dict]:
     """
     Nutritionシートに書き込む。
@@ -191,7 +193,7 @@ def write_nutrition_data(
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = wb[SHEET_NAME]
+    ws = ExcelWriter.get_sheet(wb, sheet_prefix + SHEET_NAME)
 
     # 日付列を探す（なければ末尾に追加）
     col_idx = ExcelWriter.find_date_column(ws, target_date)

@@ -59,7 +59,8 @@ def build_inbody_preview(data: dict, row_idx: int) -> list[dict]:
     return rows
 
 
-def write_inbody_data(data: dict, target_date: datetime.date, excel_path: str) -> list[dict]:
+def write_inbody_data(data: dict, target_date: datetime.date, excel_path: str,
+                      sheet_prefix: str = "") -> list[dict]:
     """
     In Bodyシートに書き込む。初回はヘッダーを自動作成。
 
@@ -68,7 +69,7 @@ def write_inbody_data(data: dict, target_date: datetime.date, excel_path: str) -
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = wb[ExcelWriter.SHEET_INBODY]
+    ws = ExcelWriter.get_sheet(wb, sheet_prefix + ExcelWriter.SHEET_INBODY)
 
     _initialize_if_empty(ws)
     row_idx = _find_or_create_row(ws, target_date)

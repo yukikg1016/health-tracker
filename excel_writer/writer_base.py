@@ -71,6 +71,20 @@ end tell
         return backup_path
 
     @staticmethod
+    def get_sheet(wb, name: str):
+        """
+        シート名で検索。完全一致 → strip一致 → 大文字小文字無視 の順で試みる。
+        見つからなければ KeyError を raise。
+        """
+        if name in wb.sheetnames:
+            return wb[name]
+        name_stripped = name.strip().lower()
+        for n in wb.sheetnames:
+            if n.strip().lower() == name_stripped:
+                return wb[n]
+        raise KeyError(f"シート '{name}' が見つかりません。存在するシート: {wb.sheetnames}")
+
+    @staticmethod
     def find_date_column(ws, target_date: datetime.date) -> int | None:
         """Row 1 を左から右に走査し、target_date と一致する列番号（1-based）を返す。
         datetime, date, 文字列 ('2026.04.21' / '2026/04/21') の各形式に対応。

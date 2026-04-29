@@ -30,15 +30,48 @@ try:
 except Exception:
     _cookie = None
 
+# ── ユーザー設定 ──────────────────────────────────────────────────────────────
+def _get_user_passwords() -> dict:
+    """Returns {user_id: password} from Streamlit secrets or env vars."""
+    users = {}
+    # Streamlit Secrets から読む（優先）
+    try:
+        import streamlit as _st
+        for uid in ["1", "2", "3", "4"]:
+            key = f"USER_{uid}_PASSWORD"
+            try:
+                users[uid] = _st.secrets[key]
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # 環境変数からも読む（ローカル用）
+    for uid in ["1", "2", "3", "4"]:
+        key = f"USER_{uid}_PASSWORD"
+        val = os.environ.get(key)
+        if val and uid not in users:
+            users[uid] = val
+    # フォールバック: 既存の APP_PASSWORD を user 1 に割り当て
+    if "1" not in users:
+        users["1"] = os.environ.get("APP_PASSWORD", "yukihealth2026")
+    return users
+
+def _user_display_name(uid: str) -> str:
+    try:
+        import streamlit as _st
+        return _st.secrets.get(f"USER_{uid}_NAME", f"User {uid}")
+    except Exception:
+        return os.environ.get(f"USER_{uid}_NAME", f"User {uid}")
+
 # ── パスワード保護 ────────────────────────────────────────────────────────────
 def _check_password() -> bool:
-    correct = os.environ.get("APP_PASSWORD", "yukihealth2026")
-
     # クッキーで永続ログイン確認
     if _cookie is not None:
         try:
-            if _cookie.get("ht_auth") == "ok":
+            saved = _cookie.get("ht_user")
+            if saved and saved in _get_user_passwords():
                 st.session_state["authenticated"] = True
+                st.session_state["user_id"] = saved
         except Exception:
             pass
 
@@ -46,22 +79,30 @@ def _check_password() -> bool:
         return True
 
     st.markdown("## 🔐 Health Tracker")
-    pw = st.text_input("パスワードを入力してください", type="password", key="pw_input")
+    uid = st.text_input("ユーザーID（1〜4）", key="uid_input", placeholder="1")
+    pw  = st.text_input("パスワード", type="password", key="pw_input")
     if st.button("ログイン", type="primary"):
-        if pw == correct:
+        users = _get_user_passwords()
+        if uid in users and pw == users[uid]:
             st.session_state["authenticated"] = True
+            st.session_state["user_id"] = uid
             if _cookie is not None:
                 try:
-                    _cookie.set("ht_auth", "ok", max_age=30 * 24 * 60 * 60)  # 30日間
+                    _cookie.set("ht_user", uid, max_age=30 * 24 * 60 * 60)
                 except Exception:
                     pass
             st.rerun()
         else:
-            st.error("パスワードが違います")
+            st.error("IDまたはパスワードが違います")
     return False
 
 if not _check_password():
     st.stop()
+
+# ── ユーザーコンテキスト ──────────────────────────────────────────────────────
+_USER_ID     = st.session_state.get("user_id", "1")
+# User 1 は既存シートをそのまま使う（プレフィックスなし）
+_USER_PREFIX = "" if _USER_ID == "1" else f"{_USER_ID}_"
 
 # クラウド環境かローカルかを判定
 _IS_CLOUD = not (pathlib.Path.home() / "　Reasearch" / "Yuki データ.xlsx").exists()
@@ -179,6 +220,15 @@ with st.sidebar:
         excel_path = st.text_input("Excelファイルパス", value=DEFAULT_EXCEL, key="excel_path_input")
 
     st.divider()
+    st.caption(f"👤 ログイン中: {_user_display_name(_USER_ID)}（ID: {_USER_ID}）")
+    if st.button("🔓 ログアウト", use_container_width=True):
+        st.session_state.clear()
+        if _cookie is not None:
+            try:
+                _cookie.remove("ht_user")
+            except Exception:
+                pass
+        st.rerun()
     st.caption("使い方: 画像をアップロード → 抽出 → 確認 → 書き込み")
 
 # ── Main tabs ────────────────────────────────────────────────────────────────
@@ -221,7 +271,8 @@ with tab_dash:
                 with st.spinner("データを分析中..."):
                     try:
                         from dashboard_reader import read_dashboard_data
-                        st.session_state["dashboard_data"] = read_dashboard_data(dash_excel_path)
+                        st.session_state["dashboard_data"] = read_dashboard_data(
+                            dash_excel_path, sheet_prefix=_USER_PREFIX)
                     except Exception as e:
                         st.error(f"データ読み込みエラー: {e}")
                         st.session_state["dashboard_data"] = {}
@@ -544,7 +595,8 @@ with tab_input:
                         else:
                             _supp_path = excel_path
                         from excel_writer.nutrition_writer import write_supplement_data
-                        n = write_supplement_data(selected_supplements, selected_date, _supp_path)
+                        n = write_supplement_data(selected_supplements, selected_date, _supp_path,
+                                                  sheet_prefix=_USER_PREFIX)
                         if _IS_CLOUD:
                             upload_from_path(_supp_path)
                             pathlib.Path(_supp_path).unlink(missing_ok=True)
@@ -815,7 +867,8 @@ with tab_input:
                                         from excel_writer.nutrition_writer import write_nutrition_data
                                         merged_nutrition = merge_dicts([r["data"] for r in ok_results])
                                         write_nutrition_data(merged_nutrition, date_saved, meal_type_saved,
-                                                             excel_path_saved, meal_time=meal_time_saved)
+                                                             excel_path_saved, meal_time=meal_time_saved,
+                                                             sheet_prefix=_USER_PREFIX)
                                         meal_label = {"breakfast": "Breakfast", "lunch": "Lunch",
                                                       "dinner": "Dinner", "snacks": "Snacks"}.get(meal_type_saved, meal_type_saved)
                                         st.success(f"✅ Nutrition [{meal_label}] に書き込みました！（{date_saved}）")
@@ -823,17 +876,21 @@ with tab_input:
                                         merged = display_items[0]["data"]
                                         if sheet_type == "sleep":
                                             from excel_writer.sleep_writer import write_sleep_data
-                                            write_sleep_data(merged, date_saved, excel_path_saved)
+                                            write_sleep_data(merged, date_saved, excel_path_saved,
+                                                             sheet_prefix=_USER_PREFIX)
                                         elif sheet_type == "labs":
                                             from excel_writer.labs_writer import write_labs_data
-                                            write_labs_data(merged.get("results", []), date_saved, excel_path_saved)
+                                            write_labs_data(merged.get("results", []), date_saved, excel_path_saved,
+                                                            sheet_prefix=_USER_PREFIX)
                                         elif sheet_type == "inbody":
                                             from excel_writer.inbody_writer import write_inbody_data
-                                            write_inbody_data(merged, date_saved, excel_path_saved)
+                                            write_inbody_data(merged, date_saved, excel_path_saved,
+                                                              sheet_prefix=_USER_PREFIX)
                                         elif sheet_type in ("workout", "performance"):
                                             from excel_writer.workout_writer import write_workout_data, get_column_a_dump
                                             try:
-                                                col_a = get_column_a_dump(excel_path_saved)
+                                                col_a = get_column_a_dump(excel_path_saved,
+                                                                          sheet_prefix=_USER_PREFIX)
                                                 if col_a:
                                                     with st.expander("🔍 Workout sheet 行構造", expanded=False):
                                                         st.dataframe(pd.DataFrame(col_a, columns=["行", "列A", "列B"]),
@@ -841,7 +898,8 @@ with tab_input:
                                             except Exception:
                                                 pass
                                             for r in ok_results:
-                                                dbg = write_workout_data(r["data"], date_saved, excel_path_saved)
+                                                dbg = write_workout_data(r["data"], date_saved, excel_path_saved,
+                                                                         sheet_prefix=_USER_PREFIX)
                                                 st.caption(f"✍️ {dbg.get('workout_type')} → col {dbg.get('col')} | "
                                                            f"{list(dbg.get('written', {}).keys())}")
                                         st.success(f"✅ Workout シートに書き込みました！（{date_saved}）")

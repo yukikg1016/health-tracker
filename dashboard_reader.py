@@ -61,14 +61,22 @@ def _get_recent_dates(ws, n=14) -> list[datetime.date]:
     return dates[:n]
 
 
-def read_dashboard_data(excel_path: str, days: int = 14) -> dict:
+def read_dashboard_data(excel_path: str, days: int = 14, sheet_prefix: str = "") -> dict:
     """
     Read recent data from all sheets.
     Returns a dict with sleep, workout, nutrition, inbody, labs data
     for the past `days` days.
     """
     wb = openpyxl.load_workbook(excel_path, data_only=True)
-    sheet_map = {n.strip().lower(): wb[n] for n in wb.sheetnames}
+    # sheet_prefix付きシート名と無しの両方でマップを構築
+    p = sheet_prefix.strip().lower()
+    sheet_map = {}
+    for n in wb.sheetnames:
+        key = n.strip().lower()
+        sheet_map[key] = wb[n]
+        # プレフィックスを除いたキーでも引けるようにする
+        if p and key.startswith(p):
+            sheet_map[key[len(p):].strip()] = wb[n]
 
     today = datetime.date.today()
     date_range = [today - datetime.timedelta(days=i) for i in range(days)]
