@@ -1,0 +1,58 @@
+name: Auto Health Import
+
+on:
+  # 毎朝8時（日本時間）に自動実行 = UTC 23:00
+  schedule:
+    - cron: "0 23 * * *"
+
+  # 手動実行ボタン（GitHubのActionsタブから実行可能）
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "何日前まで遡るか"
+        required: false
+        default: "7"
+      dry_run:
+        description: "Dry run（書き込まない）"
+        type: boolean
+        default: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            openpyxl \
+            google-auth \
+            google-api-python-client \
+            python-dotenv
+
+      - name: Run auto import
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_FILE_ID:              ${{ secrets.GDRIVE_FILE_ID }}
+          USER_1_HEALTH_FOLDER_ID:     ${{ secrets.USER_1_HEALTH_FOLDER_ID }}
+          USER_2_HEALTH_FOLDER_ID:     ${{ secrets.USER_2_HEALTH_FOLDER_ID }}
+          USER_3_HEALTH_FOLDER_ID:     ${{ secrets.USER_3_HEALTH_FOLDER_ID }}
+          USER_4_HEALTH_FOLDER_ID:     ${{ secrets.USER_4_HEALTH_FOLDER_ID }}
+        run: |
+          DAYS="${{ github.event.inputs.days || '7' }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+          if [ "$DRY" = "true" ]; then
+            python auto_import.py --days "$DAYS" --dry-run
+          else
+            python auto_import.py --days "$DAYS"
+          fi
