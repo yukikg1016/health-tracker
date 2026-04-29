@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Health Auto Export CSV → Sleep シートデータへの変換"""
+"""Health Auto Export CSV/TSV → Sleep シートデータへの変換"""
 
 import csv
 import datetime
@@ -16,7 +16,84 @@ CSV_TO_SLEEP = {
     "睡眠分析 [Total] (hr)":          ("sleep.total_sleep",                     lambda x: float(x) * 60),
     "睡眠分析 [深い] (hr)":           ("sleep.deep_sleep",                      lambda x: float(x) * 60),
     "心拍数 [最小] (count/min)":      ("hearwatch.sleep_bpm",                   float),
+    "Apple 睡眠時手首温度 (degC)":    ("wellness.wrist_temp",                   float),
+    "VO2 Max (ml/(kg·min))":         ("wellness.vo2_max",                       float),
 }
+
+
+def _detect_delimiter(text: str) -> str:
+    """タブ区切りかカンマ区切りかを自動検出する。"""
+    first_line = text.split("\n")[0] if "\n" in text else text
+    return "\t" if "\t" in first_line else ","
+
+
+def _parse_row(row: dict) -> dict:
+    """
+    CSVの1行からSleepシート書き込み用dictを生成する。
+    Returns:
+        {
+          "hearwatch": { "daily_bpm": ..., ... },
+          "sleep":     { "total_sleep": {"total_minutes": ...}, ... },
+          "wellness":  { "wrist_temp": ..., ... },
+        }
+    """
+    hearwatch: dict = {}
+    sleep: dict = {}
+    wellness: dict = {}
+
+    for csv_col, (sleep_key, convert) in CSV_TO_SLEEP.items():
+        raw = row.get(csv_col, "").strip()
+        if not raw:
+            continue
+        try:
+            val = convert(raw)
+        except (ValueError, TypeError):
+            continue
+        if val is None:
+            continue
+
+        section, field = sleep_key.split(".", 1)
+        if section == "hearwatch":
+            hearwatch[field] = round(val, 2)
+        elif section == "sleep":
+            sleep[field] = {"total_minutes": round(val, 1)}
+        elif section == "wellness":
+            wellness[field] = round(val, 2)
+
+    result = {}
+    if hearwatch:
+        result["hearwatch"] = hearwatch
+    if sleep:
+        result["sleep"] = sleep
+    if wellness:
+        result["wellness"] = wellness
+    return result
+
+
+def parse_file_content(csv_content: str) -> tuple[datetime.date | None, dict]:
+    """
+    1ファイル（1日分）の Health Export ファイルをパースする。
+    Returns: (date, sleep_data_dict)
+    """
+    delim = _detect_delimiter(csv_content)
+    reader = csv.DictReader(io.StringIO(csv_content), delimiter=delim)
+
+    for row in reader:
+        raw_date = row.get("日付/時間", "").strip()
+        if not raw_date:
+            continue
+        try:
+            row_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S").date()
+        except ValueError:
+            try:
+                row_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+
+        data = _parse_row(row)
+        return row_date, data
+
+    return None, {}
 
 
 def parse_health_csv(
@@ -24,16 +101,11 @@ def parse_health_csv(
     target_date: datetime.date,
 ) -> dict:
     """
-    Health Auto Export CSVを解析してSleepシート書き込み用dictを返す。
-
-    Returns:
-        {
-          "hearwatch": { "daily_bpm": ..., "sleep_hrv": ..., ... },
-          "sleep":     { "total_sleep": {"total_minutes": ...}, ... },
-          "_source_row": {...}   # 元データ（プレビュー用）
-        }
+    複数行 CSV から特定日のデータを取り出す（後方互換）。
+    Returns: {"hearwatch": {...}, "sleep": {...}, "_source_row": {...}}
     """
-    reader = csv.DictReader(io.StringIO(csv_content), delimiter="\t")
+    delim = _detect_delimiter(csv_content)
+    reader = csv.DictReader(io.StringIO(csv_content), delimiter=delim)
     target_row = None
 
     for row in reader:
@@ -52,37 +124,15 @@ def parse_health_csv(
     if target_row is None:
         raise ValueError(f"{target_date} のデータがCSVに見つかりませんでした。")
 
-    hearwatch: dict = {}
-    sleep: dict = {}
-
-    for csv_col, (sleep_key, convert) in CSV_TO_SLEEP.items():
-        raw = target_row.get(csv_col, "").strip()
-        if not raw:
-            continue
-        try:
-            val = convert(raw)
-        except (ValueError, TypeError):
-            continue
-        if val is None:
-            continue
-
-        section, field = sleep_key.split(".", 1)
-        if section == "hearwatch":
-            hearwatch[field] = round(val, 2)
-        elif section == "sleep":
-            # sleep_writer は duration を {"total_minutes": x} の形式で受け取る
-            sleep[field] = {"total_minutes": round(val, 1)}
-
-    return {
-        "hearwatch": hearwatch,
-        "sleep":     sleep,
-        "_source_row": dict(target_row),
-    }
+    data = _parse_row(target_row)
+    data["_source_row"] = dict(target_row)
+    return data
 
 
 def get_available_dates(csv_content: str) -> list[datetime.date]:
     """CSVに含まれる日付の一覧を返す。"""
-    reader = csv.DictReader(io.StringIO(csv_content), delimiter="\t")
+    delim = _detect_delimiter(csv_content)
+    reader = csv.DictReader(io.StringIO(csv_content), delimiter=delim)
     dates = []
     for row in reader:
         raw_date = row.get("日付/時間", "").strip()
@@ -90,5 +140,9 @@ def get_available_dates(csv_content: str) -> list[datetime.date]:
             d = datetime.datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S").date()
             dates.append(d)
         except ValueError:
-            pass
+            try:
+                d = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+                dates.append(d)
+            except ValueError:
+                pass
     return sorted(dates)

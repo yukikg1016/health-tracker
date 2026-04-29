@@ -89,3 +89,61 @@ def is_configured() -> bool:
         os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         and os.environ.get("GDRIVE_FILE_ID")
     )
+
+
+# ── Health Export フォルダ連携 ─────────────────────────────────────────────────
+
+def list_health_export_files(folder_id: str) -> list[dict]:
+    """
+    Drive フォルダ内のファイル一覧を返す。
+    Returns: [{"id": ..., "name": ..., "mimeType": ..., "modifiedTime": ...}, ...]
+    """
+    service = _get_service()
+    query = f"'{folder_id}' in parents and trashed=false"
+    results = service.files().list(
+        q=query,
+        fields="files(id,name,mimeType,modifiedTime)",
+        orderBy="name desc",
+        pageSize=200,
+    ).execute()
+    return results.get("files", [])
+
+
+def download_file_as_text(file_id: str, mime_type: str = "") -> str:
+    """
+    Drive ファイルをテキスト（CSV/TSV）として取得する。
+    Google Sheets の場合は CSV としてエクスポートする。
+    """
+    from googleapiclient.http import MediaIoBaseDownload
+
+    service = _get_service()
+
+    if not mime_type:
+        meta = service.files().get(fileId=file_id, fields="mimeType").execute()
+        mime_type = meta.get("mimeType", "")
+
+    if mime_type == "application/vnd.google-apps.spreadsheet":
+        request = service.files().export_media(fileId=file_id, mimeType="text/csv")
+    else:
+        request = service.files().get_media(fileId=file_id)
+
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+
+    buf.seek(0)
+    raw = buf.read()
+    # BOM 除去
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    return raw.decode("utf-8", errors="replace")
+
+
+def is_health_export_configured() -> bool:
+    """Health Export フォルダ連携に必要な設定が揃っているか確認"""
+    return bool(
+        os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        and os.environ.get("HEALTH_EXPORT_FOLDER_ID")
+    )

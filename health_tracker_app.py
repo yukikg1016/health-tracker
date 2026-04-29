@@ -233,7 +233,7 @@ with st.sidebar:
     st.caption("使い方: 画像をアップロード → 抽出 → 確認 → 書き込み")
 
 # ── Main tabs ────────────────────────────────────────────────────────────────
-tab_dash, tab_input = st.tabs(["📊 ダッシュボード", "📸 データ入力"])
+tab_dash, tab_input, tab_auto = st.tabs(["📊 ダッシュボード", "📸 データ入力", "📥 Auto Import"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — DASHBOARD
@@ -923,3 +923,235 @@ with tab_input:
                                     with st.expander("詳細"):
                                         import traceback
                                         st.code(traceback.format_exc())
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — AUTO IMPORT (Health Auto Export)
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_auto:
+    st.markdown("### 📥 Auto Health Export 自動インポート")
+    st.caption("Google DriveのHealthMetricsフォルダから睡眠データを一括取り込みします。")
+
+    # ── フォルダID 入力 ─────────────────────────────────────────────────────
+    # Secrets/env から読む（ユーザーごとのフォルダID対応）
+    def _get_default_folder_id() -> str:
+        uid = _USER_ID
+        # USER_1_HEALTH_FOLDER_ID... という形式に対応
+        for key in [f"USER_{uid}_HEALTH_FOLDER_ID", "HEALTH_EXPORT_FOLDER_ID"]:
+            try:
+                import streamlit as _st
+                val = _st.secrets.get(key, "")
+                if val:
+                    return val
+            except Exception:
+                pass
+            val = os.environ.get(key, "")
+            if val:
+                return val
+        return ""
+
+    folder_id_default = _get_default_folder_id()
+
+    folder_id_input = st.text_input(
+        "Google Drive フォルダID",
+        value=folder_id_default,
+        placeholder="例: 1dvvTNwdj8xo1olZTV_xxxxxxxxxx",
+        help="DriveのフォルダURLの末尾の文字列。Secretsに USER_1_HEALTH_FOLDER_ID で保存可能。",
+        key="health_folder_id",
+    )
+
+    # ── ローカル: CSVファイル直接アップロード ──────────────────────────────
+    st.markdown("**または** CSVファイルを直接アップロード（複数可）")
+    auto_uploaded = st.file_uploader(
+        "HealthMetrics-*.csv をアップロード",
+        type=["csv", "tsv", "txt"],
+        accept_multiple_files=True,
+        key="auto_csv_files",
+    )
+
+    st.divider()
+
+    # ── スキャン実行 ────────────────────────────────────────────────────────
+    scan_col, _ = st.columns([1, 2])
+    scan_clicked = scan_col.button("🔍 ファイルをスキャン", type="primary", use_container_width=True)
+
+    if scan_clicked:
+        st.session_state.pop("auto_scan_results", None)
+        file_records = []  # [{date, data, filename}]
+        errors = []
+
+        from extractors.health_csv_extractor import parse_file_content
+
+        # Google Drive からスキャン
+        if folder_id_input and not auto_uploaded:
+            if not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+                st.error("Google Drive連携にはGOOGLE_SERVICE_ACCOUNT_JSONが必要です")
+            else:
+                with st.spinner("Google Driveをスキャン中..."):
+                    try:
+                        from gdrive_helper import list_health_export_files, download_file_as_text
+                        files = list_health_export_files(folder_id_input)
+                        health_files = [f for f in files
+                                        if "HealthMetrics" in f.get("name", "")
+                                        or "health" in f.get("name", "").lower()]
+                        if not health_files:
+                            st.warning("HealthMetrics ファイルが見つかりませんでした。フォルダIDを確認してください。")
+                        else:
+                            prog = st.progress(0, text="ダウンロード中...")
+                            for i, f in enumerate(health_files):
+                                prog.progress((i + 1) / len(health_files),
+                                              text=f"読み込み中: {f['name']}")
+                                try:
+                                    content = download_file_as_text(f["id"], f.get("mimeType", ""))
+                                    date, data = parse_file_content(content)
+                                    if date and data:
+                                        file_records.append({"date": date, "data": data,
+                                                             "filename": f["name"]})
+                                    else:
+                                        errors.append(f"{f['name']}: データなし")
+                                except Exception as e:
+                                    errors.append(f"{f['name']}: {e}")
+                            prog.empty()
+                    except Exception as e:
+                        st.error(f"Drive スキャンエラー: {e}")
+
+        # ローカルアップロードからスキャン
+        elif auto_uploaded:
+            for uf in auto_uploaded:
+                try:
+                    content = uf.read().decode("utf-8", errors="replace")
+                    if content.startswith("\xef\xbb\xbf"):
+                        content = content[3:]
+                    date, data = parse_file_content(content)
+                    if date and data:
+                        file_records.append({"date": date, "data": data,
+                                             "filename": uf.name})
+                    else:
+                        errors.append(f"{uf.name}: データなし")
+                except Exception as e:
+                    errors.append(f"{uf.name}: {e}")
+        else:
+            st.warning("フォルダIDを入力するか、CSVファイルをアップロードしてください")
+
+        if file_records or errors:
+            file_records.sort(key=lambda x: x["date"], reverse=True)
+            st.session_state["auto_scan_results"] = file_records
+            st.session_state["auto_scan_errors"] = errors
+            if file_records:
+                st.success(f"✅ {len(file_records)} 件のデータを読み込みました")
+            if errors:
+                with st.expander(f"⚠️ {len(errors)} 件のエラー"):
+                    for e in errors:
+                        st.caption(e)
+
+    # ── スキャン結果表示 + 書き込み ─────────────────────────────────────────
+    if "auto_scan_results" in st.session_state:
+        records = st.session_state["auto_scan_results"]
+
+        if not records:
+            st.info("インポート可能なデータがありません")
+        else:
+            st.markdown(f"#### 取り込み対象データ（{len(records)} 件）")
+
+            # 日付選択チェックボックス
+            st.caption("書き込む日付を選択してください（デフォルト：すべて）")
+            select_all = st.checkbox("すべて選択", value=True, key="auto_select_all")
+
+            preview_rows = []
+            selected_dates = set()
+            for rec in records:
+                d = rec["date"]
+                data = rec["data"]
+                sleep_h = None
+                deep_h = None
+                rhr = None
+                hrv = None
+                if "sleep" in data:
+                    ts = data["sleep"].get("total_sleep")
+                    if isinstance(ts, dict):
+                        mins = ts.get("total_minutes")
+                        if mins:
+                            sleep_h = round(mins / 60, 1)
+                    ds = data["sleep"].get("deep_sleep")
+                    if isinstance(ds, dict):
+                        mins = ds.get("total_minutes")
+                        if mins:
+                            deep_h = round(mins / 60, 1)
+                if "hearwatch" in data:
+                    rhr = data["hearwatch"].get("waking_bpm")
+                    hrv = data["hearwatch"].get("sleep_hrv")
+
+                checked = st.checkbox(
+                    f"{d}　　睡眠: {sleep_h}h　深睡眠: {deep_h}h　安静時HR: {rhr}　HRV: {hrv}",
+                    value=select_all,
+                    key=f"auto_check_{d}",
+                )
+                if checked:
+                    selected_dates.add(d)
+                preview_rows.append({
+                    "日付": str(d),
+                    "ファイル": rec["filename"],
+                    "睡眠 (h)": sleep_h,
+                    "深睡眠 (h)": deep_h,
+                    "安静時HR": rhr,
+                    "HRV": hrv,
+                })
+
+            import pandas as pd
+            st.dataframe(pd.DataFrame(preview_rows), use_container_width=True)
+
+            selected_records = [r for r in records if r["date"] in selected_dates]
+            st.markdown(f"**{len(selected_records)} 件を選択中**")
+
+            if selected_records and st.button(
+                f"✅ {len(selected_records)} 件を Sleep シートに書き込む",
+                type="primary",
+                use_container_width=True,
+                key="auto_write_btn",
+            ):
+                with st.spinner("Excelに書き込み中..."):
+                    try:
+                        if _IS_CLOUD:
+                            from gdrive_helper import download_to_temp, upload_from_path
+                            auto_excel_path = download_to_temp()
+                        else:
+                            auto_excel_path = excel_path
+
+                        if not auto_excel_path or not pathlib.Path(auto_excel_path).exists():
+                            st.error("Excelファイルが見つかりません")
+                        else:
+                            from excel_writer.sleep_writer import write_sleep_data
+                            written = 0
+                            write_errors = []
+                            prog2 = st.progress(0, text="書き込み中...")
+                            for i, rec in enumerate(selected_records):
+                                prog2.progress((i + 1) / len(selected_records),
+                                               text=f"書き込み中: {rec['date']}")
+                                try:
+                                    write_sleep_data(
+                                        rec["data"], rec["date"], auto_excel_path,
+                                        skip_existing=True,
+                                        sheet_prefix=_USER_PREFIX,
+                                    )
+                                    written += 1
+                                except Exception as e:
+                                    write_errors.append(f"{rec['date']}: {e}")
+                            prog2.empty()
+
+                            if _IS_CLOUD:
+                                upload_from_path(auto_excel_path)
+                                pathlib.Path(auto_excel_path).unlink(missing_ok=True)
+                                st.session_state.pop("dashboard_excel_path", None)
+                                st.session_state.pop("dashboard_data", None)
+
+                            if written:
+                                st.success(f"✅ {written} 件の睡眠データを書き込みました！（skip_existing=ON で既存データは保護）")
+                            if write_errors:
+                                with st.expander(f"⚠️ {len(write_errors)} 件のエラー"):
+                                    for e in write_errors:
+                                        st.caption(e)
+
+                    except Exception as e:
+                        st.error(f"書き込みエラー: {e}")
+                        import traceback
+                        with st.expander("詳細"):
+                            st.code(traceback.format_exc())
