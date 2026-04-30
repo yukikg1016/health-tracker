@@ -65,6 +65,8 @@ def _user_display_name(uid: str) -> str:
         return os.environ.get(f"USER_{uid}_NAME", f"User {uid}")
 
 # ── パスワード保護 ────────────────────────────────────────────────────────────
+_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1年（一度ログインしたら自動維持）
+
 def _check_password() -> bool:
     # クッキーで永続ログイン確認
     if _cookie is not None:
@@ -79,22 +81,75 @@ def _check_password() -> bool:
     if st.session_state.get("authenticated"):
         return True
 
-    st.markdown("## 🔐 Health Tracker")
-    uid = st.text_input("ユーザーID（1〜4）", key="uid_input", placeholder="1")
-    pw  = st.text_input("パスワード", type="password", key="pw_input")
-    if st.button("ログイン", type="primary"):
+    # クエリパラメータ経由のログイン（HTMLフォームからのPOST代替）
+    qp = st.query_params
+    if "uid" in qp and "pw" in qp:
         users = _get_user_passwords()
-        if uid in users and pw == users[uid]:
+        q_uid = qp["uid"]
+        q_pw  = qp["pw"]
+        if q_uid in users and q_pw == users[q_uid]:
             st.session_state["authenticated"] = True
-            st.session_state["user_id"] = uid
+            st.session_state["user_id"] = q_uid
             if _cookie is not None:
                 try:
-                    _cookie.set("ht_user", uid, max_age=30 * 24 * 60 * 60)
+                    _cookie.set("ht_user", q_uid, max_age=_COOKIE_MAX_AGE)
                 except Exception:
                     pass
+            st.query_params.clear()
             st.rerun()
-        else:
-            st.error("IDまたはパスワードが違います")
+
+    # Face ID / パスワードマネージャー対応のカスタムHTMLフォーム
+    st.markdown("## 🔐 Health Tracker")
+
+    import streamlit.components.v1 as components
+    components.html("""
+    <style>
+      body { margin: 0; font-family: -apple-system, sans-serif; }
+      form { display: flex; flex-direction: column; gap: 12px; max-width: 320px; }
+      input {
+        padding: 12px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        outline: none;
+        -webkit-appearance: none;
+      }
+      input:focus { border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+      button {
+        padding: 13px;
+        background: #7c3aed;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:active { background: #6d28d9; }
+    </style>
+    <form id="lf" onsubmit="doLogin(event)">
+      <input type="text"     name="username" id="uid" placeholder="ユーザーID（1〜4）"
+             autocomplete="username" inputmode="numeric" />
+      <input type="password" name="password" id="pw"  placeholder="パスワード"
+             autocomplete="current-password" />
+      <button type="submit">ログイン</button>
+    </form>
+    <script>
+    function doLogin(e) {
+      e.preventDefault();
+      var uid = document.getElementById('uid').value.trim();
+      var pw  = document.getElementById('pw').value;
+      var url = window.parent.location.href.split('?')[0];
+      window.parent.location.href = url + '?uid=' + encodeURIComponent(uid) + '&pw=' + encodeURIComponent(pw);
+    }
+    // エンターキー対応
+    document.getElementById('pw').addEventListener('keydown', function(e){
+      if(e.key==='Enter'){ doLogin(e); }
+    });
+    </script>
+    """, height=180)
+
+    st.caption("※ ブラウザの「パスワードを保存」を使うとFace IDで自動ログインできます")
     return False
 
 if not _check_password():
