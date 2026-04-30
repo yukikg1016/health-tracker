@@ -65,53 +65,54 @@ def _user_display_name(uid: str) -> str:
         return os.environ.get(f"USER_{uid}_NAME", f"User {uid}")
 
 # ── パスワード保護 ────────────────────────────────────────────────────────────
-_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1年（一度ログインしたら自動維持）
+
+def _get_auto_users() -> set:
+    auto_users = set()
+    try:
+        val = st.secrets.get("AUTO_LOGIN_USERS", "")
+        auto_users = {v.strip() for v in val.split(",") if v.strip()}
+    except Exception:
+        pass
+    auto_users |= {v.strip() for v in os.environ.get("AUTO_LOGIN_USERS", "").split(",") if v.strip()}
+    return auto_users
 
 def _check_password() -> bool:
-    # ① クッキーコントローラーは初回レンダリングでは値を返せないため1回rerunが必要
-    if _cookie is not None and "cookies_ready" not in st.session_state:
-        st.session_state["cookies_ready"] = True
-        st.rerun()
+    import streamlit.components.v1 as _components
 
-    # ② クッキーで永続ログイン確認
-    if _cookie is not None:
-        try:
-            saved = _cookie.get("ht_user")
-            if saved and saved in _get_user_passwords():
-                st.session_state["authenticated"] = True
-                st.session_state["user_id"] = saved
-        except Exception:
-            pass
+    # ① localStorage から自動ログイン（iOS standalone対応）
+    # JSがlocalStorageのht_userを読み、URLに ?u=X を追加してリダイレクト
+    if not st.session_state.get("authenticated"):
+        _components.html("""
+        <script>
+        (function() {
+            try {
+                var u = localStorage.getItem('ht_user');
+                if (!u) return;
+                var params = new URLSearchParams(window.parent.location.search);
+                if (!params.has('u')) {
+                    params.set('u', u);
+                    window.parent.location.replace(
+                        window.parent.location.pathname + '?' + params.toString()
+                    );
+                }
+            } catch(e) {}
+        })();
+        </script>
+        """, height=0)
 
-    # ② URLパラメータ ?u=1 で自動ログイン（ホーム画面に追加したURLで使う）
+    # ② URLパラメータ ?u=X で自動ログイン
     qp = st.query_params
     if not st.session_state.get("authenticated") and "u" in qp:
         uid_q = str(qp["u"]).strip()
         users = _get_user_passwords()
-        if uid_q in users:
-            # パスワード不要のシングルユーザーショートカット用
-            # Secretsに AUTO_LOGIN_USERS="1,2" のように登録すると有効化
-            auto_users = set()
-            try:
-                import streamlit as _st
-                val = _st.secrets.get("AUTO_LOGIN_USERS", "")
-                auto_users = {v.strip() for v in val.split(",") if v.strip()}
-            except Exception:
-                pass
-            auto_users |= {v.strip() for v in os.environ.get("AUTO_LOGIN_USERS", "").split(",") if v.strip()}
-            if uid_q in auto_users:
-                st.session_state["authenticated"] = True
-                st.session_state["user_id"] = uid_q
-                if _cookie is not None:
-                    try:
-                        _cookie.set("ht_user", uid_q, max_age=_COOKIE_MAX_AGE)
-                    except Exception:
-                        pass
-                # rerun しない → URLの ?u=1 が消えずホーム画面追加後も有効
+        if uid_q in users and uid_q in _get_auto_users():
+            st.session_state["authenticated"] = True
+            st.session_state["user_id"] = uid_q
 
     if st.session_state.get("authenticated"):
         return True
 
+    # ③ 通常ログインフォーム
     st.markdown("## 🔐 Health Tracker")
     uid = st.text_input("ユーザーID（1〜4）", key="uid_input", placeholder="1")
     pw  = st.text_input("パスワード", type="password", key="pw_input")
@@ -120,11 +121,12 @@ def _check_password() -> bool:
         if uid in users and pw == users[uid]:
             st.session_state["authenticated"] = True
             st.session_state["user_id"] = uid
-            if _cookie is not None:
-                try:
-                    _cookie.set("ht_user", uid, max_age=_COOKIE_MAX_AGE)
-                except Exception:
-                    pass
+            # localStorageに保存（次回以降の自動ログイン用）
+            _components.html(f"""
+            <script>
+            try {{ localStorage.setItem('ht_user', '{uid}'); }} catch(e) {{}}
+            </script>
+            """, height=0)
             st.rerun()
         else:
             st.error("IDまたはパスワードが違います")
