@@ -68,7 +68,7 @@ def _user_display_name(uid: str) -> str:
 _COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1年（一度ログインしたら自動維持）
 
 def _check_password() -> bool:
-    # クッキーで永続ログイン確認
+    # ① クッキーで永続ログイン確認
     if _cookie is not None:
         try:
             saved = _cookie.get("ht_user")
@@ -77,6 +77,32 @@ def _check_password() -> bool:
                 st.session_state["user_id"] = saved
         except Exception:
             pass
+
+    # ② URLパラメータ ?u=1 で自動ログイン（ホーム画面に追加したURLで使う）
+    qp = st.query_params
+    if not st.session_state.get("authenticated") and "u" in qp:
+        uid_q = str(qp["u"]).strip()
+        users = _get_user_passwords()
+        if uid_q in users:
+            # パスワード不要のシングルユーザーショートカット用
+            # Secretsに AUTO_LOGIN_USERS="1,2" のように登録すると有効化
+            auto_users = set()
+            try:
+                import streamlit as _st
+                val = _st.secrets.get("AUTO_LOGIN_USERS", "")
+                auto_users = {v.strip() for v in val.split(",") if v.strip()}
+            except Exception:
+                pass
+            auto_users |= {v.strip() for v in os.environ.get("AUTO_LOGIN_USERS", "").split(",") if v.strip()}
+            if uid_q in auto_users:
+                st.session_state["authenticated"] = True
+                st.session_state["user_id"] = uid_q
+                if _cookie is not None:
+                    try:
+                        _cookie.set("ht_user", uid_q, max_age=_COOKIE_MAX_AGE)
+                    except Exception:
+                        pass
+                st.rerun()
 
     if st.session_state.get("authenticated"):
         return True
