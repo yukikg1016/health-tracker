@@ -68,7 +68,12 @@ def _user_display_name(uid: str) -> str:
 _COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1年（一度ログインしたら自動維持）
 
 def _check_password() -> bool:
-    # ① クッキーで永続ログイン確認
+    # ① クッキーコントローラーは初回レンダリングでは値を返せないため1回rerunが必要
+    if _cookie is not None and "cookies_ready" not in st.session_state:
+        st.session_state["cookies_ready"] = True
+        st.rerun()
+
+    # ② クッキーで永続ログイン確認
     if _cookie is not None:
         try:
             saved = _cookie.get("ht_user")
