@@ -735,25 +735,90 @@ with tab_input:
 
                     ok = sum(1 for r in all_results if r["status"] == "ok")
                     ng = len(all_results) - ok
-                    if ok:
-                        st.success(f"解析完了！ {ok} 枚成功" + (f"、{ng} 枚エラー" if ng else ""))
-                    else:
+                    if not ok:
                         st.error("すべての画像でエラーが発生しました")
                     for r in all_results:
                         if r["status"] == "error":
                             st.warning(f"❌ {r['file']}: {r['error']}")
 
-                    st.session_state["all_results"] = all_results
-                    st.session_state["sheet_type"] = sheet_type
-                    st.session_state["selected_date"] = selected_date
-                    st.session_state["excel_path"] = excel_path
-                    st.session_state["nutrition_description"] = nutrition_description
-                    st.session_state["nutrition_meal_type"] = nutrition_meal_type
-                    st.session_state["nutrition_meal_time"] = nutrition_meal_time
-                    st.session_state["performance_text"] = performance_text
+                    # ── 抽出成功したらそのまま書き込む ──────────────────────
+                    if ok:
+                        ok_results = [r for r in all_results if r["status"] == "ok"]
 
-            # ── プレビュー ──────────────────────────────────────────────────────
-            if "all_results" in st.session_state:
+                        def merge_dicts(dicts):
+                            merged = {}
+                            for d in dicts:
+                                if not isinstance(d, dict):
+                                    continue
+                                for k, v in d.items():
+                                    if v is not None:
+                                        existing = merged.get(k, {})
+                                        if isinstance(v, dict) and isinstance(existing, dict):
+                                            merged[k] = merge_dicts([existing, v])
+                                        else:
+                                            merged[k] = v
+                            return merged
+
+                        with st.spinner("Excelに書き込み中..."):
+                            try:
+                                from excel_writer.writer_base import ExcelFileLockError
+                                if _IS_CLOUD:
+                                    from gdrive_helper import download_to_temp
+                                    write_excel_path = download_to_temp()
+                                else:
+                                    write_excel_path = excel_path
+
+                                if sheet_type == "nutrition":
+                                    from excel_writer.nutrition_writer import write_nutrition_data
+                                    merged_nutrition = merge_dicts([r["data"] for r in ok_results])
+                                    write_nutrition_data(merged_nutrition, selected_date, nutrition_meal_type,
+                                                         write_excel_path, meal_time=nutrition_meal_time,
+                                                         sheet_prefix=_USER_PREFIX)
+                                    meal_label = {"breakfast": "Breakfast", "lunch": "Lunch",
+                                                  "dinner": "Dinner", "snacks": "Snacks"}.get(nutrition_meal_type, nutrition_meal_type)
+                                    st.success(f"✅ {ok} 枚解析 → Nutrition [{meal_label}] に書き込みました！（{selected_date}）")
+                                else:
+                                    merged = merge_dicts([r["data"] for r in ok_results])
+                                    if sheet_type == "sleep":
+                                        from excel_writer.sleep_writer import write_sleep_data
+                                        write_sleep_data(merged, selected_date, write_excel_path,
+                                                         sheet_prefix=_USER_PREFIX)
+                                    elif sheet_type == "labs":
+                                        from excel_writer.labs_writer import write_labs_data
+                                        write_labs_data(merged.get("results", []), selected_date, write_excel_path,
+                                                        sheet_prefix=_USER_PREFIX)
+                                    elif sheet_type == "inbody":
+                                        from excel_writer.inbody_writer import write_inbody_data
+                                        write_inbody_data(merged, selected_date, write_excel_path,
+                                                          sheet_prefix=_USER_PREFIX)
+                                    elif sheet_type in ("workout", "performance"):
+                                        from excel_writer.workout_writer import write_workout_data
+                                        for r in ok_results:
+                                            write_workout_data(r["data"], selected_date, write_excel_path,
+                                                               sheet_prefix=_USER_PREFIX)
+                                    st.success(f"✅ {ok} 枚解析 → {sheet_type.capitalize()} シートに書き込みました！（{selected_date}）")
+
+                                if _IS_CLOUD:
+                                    from gdrive_helper import upload_from_path
+                                    upload_from_path(write_excel_path)
+                                    pathlib.Path(write_excel_path).unlink(missing_ok=True)
+                                    st.session_state.pop("dashboard_data", None)
+                                    st.session_state.pop("dashboard_excel_path", None)
+                                    st.success("☁️ Google Driveに自動保存しました")
+
+                                # 抽出データをexpanderで確認できるように残す
+                                with st.expander("📋 抽出データを確認", expanded=False):
+                                    for r in ok_results:
+                                        st.json(r["data"])
+
+                            except Exception as e:
+                                st.error(f"書き込みエラー: {e}")
+                                import traceback
+                                with st.expander("詳細"):
+                                    st.code(traceback.format_exc())
+
+            # ── 旧プレビュー・書き込みボタン（非表示・後方互換のため残す）──────
+            if False and "all_results" in st.session_state:
                 all_results = st.session_state["all_results"]
                 sheet_type_saved = st.session_state["sheet_type"]
                 date_saved = st.session_state["selected_date"]
