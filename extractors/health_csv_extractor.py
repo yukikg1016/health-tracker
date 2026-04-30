@@ -9,15 +9,21 @@ import io
 
 # CSV列名 → (sleepキー, 変換関数)
 CSV_TO_SLEEP = {
-    "心拍数 [平均] (count/min)":      ("hearwatch.daily_bpm",                  float),
-    "呼吸数 (count/min)":             ("hearwatch.sleep_respiratory_rate",      float),
-    "心拍変動 (ms)":                  ("hearwatch.sleep_hrv",                   float),
-    "安静時心拍数 (count/min)":       ("hearwatch.waking_bpm",                  float),
-    "睡眠分析 [Total] (hr)":          ("sleep.total_sleep",                     lambda x: float(x) * 60),
-    "睡眠分析 [深い] (hr)":           ("sleep.deep_sleep",                      lambda x: float(x) * 60),
-    "心拍数 [最小] (count/min)":      ("hearwatch.sleep_bpm",                   float),
-    "Apple 睡眠時手首温度 (degC)":    ("wellness.wrist_temp",                   float),
-    "VO2 Max (ml/(kg·min))":         ("wellness.vo2_max",                       float),
+    # 心拍系
+    "心拍数 [平均] (count/min)":          ("hearwatch.daily_bpm",                  float),
+    "心拍数 [最小] (count/min)":          ("hearwatch.sleep_bpm",                  float),
+    "安静時心拍数 (count/min)":           ("hearwatch.waking_bpm",                 float),
+    "心拍変動 (ms)":                      ("hearwatch.sleep_hrv",                  float),
+    "呼吸数 (count/min)":                 ("hearwatch.sleep_respiratory_rate",     float),
+    # 睡眠ステージ（全ステージを取得）
+    "睡眠分析 [Total] (hr)":              ("sleep.total_sleep",   lambda x: float(x) * 60),
+    "睡眠分析 [深い] (hr)":               ("sleep.deep_sleep",    lambda x: float(x) * 60),
+    "睡眠分析 [REM] (hr)":                ("sleep.rem_sleep",     lambda x: float(x) * 60),
+    "睡眠分析 [コア] (hr)":               ("sleep.core_sleep",    lambda x: float(x) * 60),
+    "睡眠分析 [起きている] (hr)":          ("sleep.awake_time",    lambda x: float(x) * 60),
+    # 体温・体力
+    "Apple 睡眠時手首温度 (degC)":         ("wellness.wrist_temp",                  float),
+    "VO2 Max (ml/(kg·min))":              ("wellness.vo2_max",                     float),
 }
 
 

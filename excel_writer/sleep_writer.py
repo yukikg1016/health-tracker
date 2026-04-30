@@ -28,6 +28,10 @@ SLEEP_ROW_MAP = {
     "sleep.sleep_session_end":          26,
     "sleep.sleep_efficiency":           27,
     "sleep.sleep_rating":               28,
+    # Auto Health Export 追加フィールド（行29-30はスプレッドシートの空き行）
+    "sleep.rem_sleep":                  29,   # REM睡眠（total_minutes）
+    "sleep.core_sleep":                 30,   # コア睡眠（total_minutes）
+    "sleep.awake_time":                 20,   # 覚醒時間（total_minutes）
     # Wellness セクション
     "wellness.readiness_score":         31,
     "wellness.sleep_fuel_rating":       32,
@@ -51,6 +55,9 @@ DURATION_KEYS = {
     "hearwatch.sleep_time",
     "sleep.total_sleep",
     "sleep.deep_sleep",
+    "sleep.rem_sleep",
+    "sleep.core_sleep",
+    "sleep.awake_time",
 }
 
 
