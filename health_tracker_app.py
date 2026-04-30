@@ -102,7 +102,7 @@ def _check_password() -> bool:
                         _cookie.set("ht_user", uid_q, max_age=_COOKIE_MAX_AGE)
                     except Exception:
                         pass
-                st.rerun()
+                # rerun しない → URLの ?u=1 が消えずホーム画面追加後も有効
 
     if st.session_state.get("authenticated"):
         return True
