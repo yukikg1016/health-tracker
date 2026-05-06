@@ -299,21 +299,22 @@ with tab_dash:
             with rcol2:
                 if st.button("🔄 更新", use_container_width=True):
                     st.session_state.pop("dashboard_excel_path", None)
-                    st.session_state.pop("dashboard_data", None)
+                    st.session_state.pop(f"dashboard_data_{_USER_ID}", None)
                     st.rerun()
 
-            # Cache dashboard data in session
-            if "dashboard_data" not in st.session_state:
+            # Cache dashboard data in session (ユーザーごとに別キー)
+            _dash_cache_key = f"dashboard_data_{_USER_ID}"
+            if _dash_cache_key not in st.session_state:
                 with st.spinner("データを分析中..."):
                     try:
                         from dashboard_reader import read_dashboard_data
-                        st.session_state["dashboard_data"] = read_dashboard_data(
+                        st.session_state[_dash_cache_key] = read_dashboard_data(
                             dash_excel_path, sheet_prefix=_USER_PREFIX)
                     except Exception as e:
                         st.error(f"データ読み込みエラー: {e}")
-                        st.session_state["dashboard_data"] = {}
+                        st.session_state[_dash_cache_key] = {}
 
-            dd = st.session_state.get("dashboard_data", {})
+            dd = st.session_state.get(_dash_cache_key, {})
             sleep_recs   = dd.get("sleep", [])
             workout_recs = dd.get("workout", [])
             nutrition_recs = dd.get("nutrition", [])
