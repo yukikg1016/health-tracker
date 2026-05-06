@@ -327,7 +327,11 @@ with tab_dash:
 
             recovery = calc_recovery_score(sleep_recs)
             training = calc_training_recommendation(recovery, workout_recs)
-            bio_age  = calc_biological_age(inbody, sleep_recs, labs, workout_recs)
+            try:
+                _actual_age = int(st.secrets.get(f"USER_{_USER_ID}_AGE", 0)) or None
+            except Exception:
+                _actual_age = None
+            bio_age  = calc_biological_age(inbody, sleep_recs, labs, workout_recs, actual_age=_actual_age)
 
             today_str = datetime.date.today().strftime("%Y年%m月%d日")
             st.markdown(f"<p style='color:#94a3b8;font-size:13px;margin-bottom:16px'>"
