@@ -108,7 +108,7 @@ def write_labs_data(results: list[dict], target_date: datetime.date, excel_path:
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = ExcelWriter.get_sheet(wb, sheet_prefix + ExcelWriter.SHEET_LABS)
+    ws = ExcelWriter.get_sheet(wb, ExcelWriter.SHEET_LABS.rstrip() + sheet_prefix)
 
     col_idx = _find_or_create_date_col(ws, target_date)
     preview = build_labs_preview(ws, results, col_idx)

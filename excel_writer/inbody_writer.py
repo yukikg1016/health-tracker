@@ -69,7 +69,7 @@ def write_inbody_data(data: dict, target_date: datetime.date, excel_path: str,
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = ExcelWriter.get_sheet(wb, sheet_prefix + ExcelWriter.SHEET_INBODY)
+    ws = ExcelWriter.get_sheet(wb, ExcelWriter.SHEET_INBODY.rstrip() + sheet_prefix)
 
     _initialize_if_empty(ws)
     row_idx = _find_or_create_row(ws, target_date)

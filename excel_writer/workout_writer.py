@@ -162,7 +162,7 @@ def write_workout_data(data: dict, target_date, excel_path: str,
 
     # Find sheet (flexible name matching)
     ws = None
-    target_name = (sheet_prefix + SHEET_NAME).strip().lower()
+    target_name = (SHEET_NAME + sheet_prefix).strip().lower()
     for name in wb.sheetnames:
         if name.strip().lower() == target_name:
             ws = wb[name]
@@ -223,7 +223,7 @@ def get_column_a_dump(excel_path: str, sheet_prefix: str = "") -> list:
     """Return list of (row, col_a_value, col_b_value) for debugging."""
     wb = openpyxl.load_workbook(excel_path)
     ws = None
-    target_name = (sheet_prefix + SHEET_NAME).strip().lower()
+    target_name = (SHEET_NAME + sheet_prefix).strip().lower()
     for name in wb.sheetnames:
         if name.strip().lower() == target_name:
             ws = wb[name]

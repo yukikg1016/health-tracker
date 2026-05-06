@@ -130,7 +130,7 @@ def write_supplement_data(taken: list, target_date, excel_path: str,
     import datetime as _dt
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = ExcelWriter.get_sheet(wb, sheet_prefix + SHEET_NAME)
+    ws = ExcelWriter.get_sheet(wb, SHEET_NAME + sheet_prefix)
 
     if isinstance(target_date, str):
         target_date = _dt.date.fromisoformat(target_date)
@@ -193,7 +193,7 @@ def write_nutrition_data(
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = ExcelWriter.get_sheet(wb, sheet_prefix + SHEET_NAME)
+    ws = ExcelWriter.get_sheet(wb, SHEET_NAME + sheet_prefix)
 
     # 日付列を探す（なければ末尾に追加）
     col_idx = ExcelWriter.find_date_column(ws, target_date)

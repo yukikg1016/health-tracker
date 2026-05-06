@@ -18,7 +18,8 @@
       "Read(//opt/homebrew/bin/**)",
       "Read(//usr/local/bin/**)",
       "Bash(/opt/homebrew/bin/brew install:*)",
-      "Bash(/opt/homebrew/bin/cloudflared tunnel:*)"
+      "Bash(/opt/homebrew/bin/cloudflared tunnel:*)",
+      "WebFetch(domain:docs.google.com)"
     ]
   }
 }

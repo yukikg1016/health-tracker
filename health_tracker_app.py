@@ -138,7 +138,7 @@ if not _check_password():
 # ── ユーザーコンテキスト ──────────────────────────────────────────────────────
 _USER_ID     = st.session_state.get("user_id", "1")
 # User 1 は既存シートをそのまま使う（プレフィックスなし）
-_USER_PREFIX = "" if _USER_ID == "1" else f"{_USER_ID}_"
+_USER_PREFIX = "" if _USER_ID == "1" else f" {_USER_ID}"
 
 # クラウド環境かローカルかを判定
 _IS_CLOUD = not (pathlib.Path.home() / "　Reasearch" / "Yuki データ.xlsx").exists()

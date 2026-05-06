@@ -99,7 +99,7 @@ def write_sleep_data(
     """
     writer = ExcelWriter(excel_path)
     wb = writer.load()
-    ws = ExcelWriter.get_sheet(wb, sheet_prefix + ExcelWriter.SHEET_SLEEP)
+    ws = ExcelWriter.get_sheet(wb, ExcelWriter.SHEET_SLEEP.rstrip() + sheet_prefix)
 
     col_idx = ExcelWriter.get_or_create_date_column(ws, target_date)
     preview = build_sleep_preview(data, col_idx)

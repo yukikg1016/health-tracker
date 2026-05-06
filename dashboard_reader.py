@@ -74,9 +74,9 @@ def read_dashboard_data(excel_path: str, days: int = 14, sheet_prefix: str = "")
     for n in wb.sheetnames:
         key = n.strip().lower()
         sheet_map[key] = wb[n]
-        # プレフィックスを除いたキーでも引けるようにする
-        if p and key.startswith(p):
-            sheet_map[key[len(p):].strip()] = wb[n]
+        # サフィックス（" 2" など）を除いたキーでも引けるようにする
+        if p and key.endswith(p):
+            sheet_map[key[:-len(p)].strip()] = wb[n]
 
     today = datetime.date.today()
     date_range = [today - datetime.timedelta(days=i) for i in range(days)]
