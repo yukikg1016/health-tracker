@@ -298,12 +298,13 @@ with tab_dash:
             rcol1, rcol2 = st.columns([4, 1])
             with rcol2:
                 if st.button("🔄 更新", use_container_width=True):
-                    st.session_state.pop("dashboard_excel_path", None)
-                    st.session_state.pop(f"dashboard_data_{_USER_ID}", None)
+                    for k in [k for k in st.session_state if "dashboard" in k or "excel" in k]:
+                        st.session_state.pop(k, None)
                     st.rerun()
 
             # Cache dashboard data in session (ユーザーごとに別キー)
             _dash_cache_key = f"dashboard_data_{_USER_ID}"
+            st.caption(f"DEBUG user={_USER_ID} prefix='{_USER_PREFIX}' key={_dash_cache_key}")
             if _dash_cache_key not in st.session_state:
                 with st.spinner("データを分析中..."):
                     try:
