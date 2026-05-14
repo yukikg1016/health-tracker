@@ -67,7 +67,8 @@ def download_to_temp() -> str:
 
 
 def upload_from_path(local_path: str) -> None:
-    """ローカルのExcelをGoogleドライブに上書きアップロード"""
+    """ローカルのExcelをGoogleドライブに上書きアップロード。
+    Google Sheets形式のファイルの場合はSheets形式を維持して変換アップロードする。"""
     from googleapiclient.http import MediaFileUpload
 
     file_id = os.environ.get("GDRIVE_FILE_ID")
@@ -75,12 +76,26 @@ def upload_from_path(local_path: str) -> None:
         raise ValueError("GDRIVE_FILE_ID が設定されていません")
 
     service = _get_service()
+
+    # ファイルの現在のMIMEタイプを確認
+    meta = service.files().get(fileId=file_id, fields="mimeType").execute()
+    is_sheets = meta.get("mimeType") == "application/vnd.google-apps.spreadsheet"
+
     media = MediaFileUpload(
         local_path,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         resumable=False,
     )
-    service.files().update(fileId=file_id, media_body=media).execute()
+
+    if is_sheets:
+        # Google Sheets形式を維持してアップロード（XLSXをSheetsに変換）
+        service.files().update(
+            fileId=file_id,
+            body={"mimeType": "application/vnd.google-apps.spreadsheet"},
+            media_body=media,
+        ).execute()
+    else:
+        service.files().update(fileId=file_id, media_body=media).execute()
 
 
 def is_configured() -> bool:
